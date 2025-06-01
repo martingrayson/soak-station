@@ -1,0 +1,11 @@
+{
+  "domain": "soakstation",
+  "name": "SoakStation",
+  "version": "1.0.0",
+  "documentation": "https://github.com/martingrayson/soak_station",
+  "config_flow": true,
+  "dependencies": [],
+  "codeowners": ["@martingrayson"],
+  "requirements": ["aiohttp"],
+  "icon": "icon.png"
+}
