@@ -5,6 +5,7 @@ import sys
 import threading
 
 import miramode
+from miramode.notifications import Notifications
 
 CMD_LIST_DEVICES = "devices-list"
 CMD_GET_DEVICE_STATE = "device-state"
@@ -13,17 +14,6 @@ CMD_PAIR_CLIENT = "client-pair"
 CMD_UNPAIR_CLIENT = "client-unpair"
 CMD_CONTROL_OUTLETS = "outlets-control"
 CMD_START_PRESET = "preset-start"
-
-OUTLET_STATE_STR = {
-    miramode.OUTLET_STOPPED: "off",
-    miramode.OUTLET_RUNNING: "on",
-}
-
-TIMER_STATE_STR = {
-    miramode.TIMER_PAUSED: "paused",
-    miramode.TIMER_STOPPED: "stopped",
-    miramode.TIMER_RUNNING: "running",
-}
 
 
 def _valid_slot(value):
@@ -187,59 +177,13 @@ def _parse_args():
         return parser.parse_args()
 
 
-class Notifications(miramode.NotificationsBase):
-    def __init__(self, event, is_pairing=False):
-        self._event = event
-        self._is_pairing = is_pairing
-
-    def client_details(self, client_slot, client_name):
-        print(f"{client_name}")
-        self._event.set()
-
-    def controls_operated(
-            self, client_slot, change_made, timer_state, target_temperature,
-            actual_temperature, outlet_state_1, outlet_state_2,
-            remaining_seconds, succesful_update_command_counter):
-        print(f"The command completed successfully")
-        self._event.set()
-
-    def device_state(
-            self, client_slot, timer_state, target_temperature,
-            actual_temperature, outlet_state_1, outlet_state_2,
-            remaining_seconds, succesful_update_command_counter):
-        print("Outlet 1: "
-              f"{OUTLET_STATE_STR.get(outlet_state_1, outlet_state_1)}")
-        print("Outlet 2: "
-              f"{OUTLET_STATE_STR.get(outlet_state_2, outlet_state_2)}")
-        print(f"Target temperature: {target_temperature:.1f}C")
-        print(f"Actual temperature: {actual_temperature:.1f}C")
-        print(f"Timer state: {TIMER_STATE_STR.get(timer_state, timer_state)}")
-        print(f"Remaining seconds: {remaining_seconds}")
-        self._event.set()
-
-    def slots(self, client_slot, slots):
-        self.slots = slots
-        self._event.set()
-
-    def success_or_failure(self, client_slot, status):
-        if status == miramode.FAILURE:
-            print(f"The command failed")
-        elif self._is_pairing:
-            print(f"Assigned client slot: {status}")
-        elif status == miramode.SUCCESS:
-            print(f"The command completed successfully")
-        else:
-            raise Exception(f"Unrecognized status: {status}")
-        self._event.set()
-
-
 def _process_list_devices_command(args):
     for name, address in miramode.get_available_devices():
         print(f"{name}: {address}")
 
 
 def _process_get_device_command(args):
-    with miramode.Connnection(
+    with miramode.Connection(
             args.address, args.client_id, args.client_slot) as conn:
 
         event = threading.Event()
@@ -252,7 +196,7 @@ def _process_get_device_command(args):
 
 
 def _process_list_clients_command(args):
-    with miramode.Connnection(
+    with miramode.Connection(
             args.address, args.client_id, args.client_slot) as conn:
 
         event = threading.Event()
@@ -271,7 +215,7 @@ def _process_list_clients_command(args):
 
 
 def _process_pair_client_command(args):
-    with miramode.Connnection(args.address) as conn:
+    with miramode.Connection(args.address) as conn:
 
         event = threading.Event()
         notifications = Notifications(event, is_pairing=True)
@@ -291,7 +235,7 @@ def _process_pair_client_command(args):
 
 
 def _process_unpair_client_command(args):
-    with miramode.Connnection(
+    with miramode.Connection(
             args.address, args.client_id, args.client_slot) as conn:
 
         event = threading.Event()
@@ -304,7 +248,7 @@ def _process_unpair_client_command(args):
 
 
 def _process_control_outlets_command(args):
-    with miramode.Connnection(
+    with miramode.Connection(
             args.address, args.client_id, args.client_slot) as conn:
 
         event = threading.Event()
@@ -317,7 +261,7 @@ def _process_control_outlets_command(args):
 
 
 def _process_start_preset_command(args):
-    with miramode.Connnection(
+    with miramode.Connection(
             args.address, args.client_id, args.client_slot) as conn:
 
         event = threading.Event()
