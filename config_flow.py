@@ -1,43 +1,79 @@
+import logging
 import voluptuous as vol
+
 from homeassistant import config_entries
 from homeassistant.core import callback
-from homeassistant.components.bluetooth import async_get_scanner
-import homeassistant.helpers.config_validation as cv
+from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import config_validation as cv
 
-DOMAIN = "soakstation"
+from .const import DOMAIN
+from .miramode import get_available_devices
+from .miramode.pairing import pair_client
+
+_LOGGER = logging.getLogger(__name__)
+
+CONF_DEVICE = "device"
+CONF_CLIENT_ID = "client_id"
+CONF_CLIENT_SLOT = "client_slot"
+
 
 class SoakStationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input=None) -> FlowResult:
         errors = {}
 
-        if user_input is not None:
-            return self.async_create_entry(title="SoakStation", data=user_input)
+        # First step: show the list of Mira devices
+        if user_input is None:
+            devices = await self.hass.async_add_executor_job(get_available_devices)
 
-        # Discover nearby Bluetooth devices
-        scanner = async_get_scanner(self.hass)
-        devices = await scanner.discover(timeout=5.0)
+            mira_devices = {
+                name: address for name, address in devices if "Mira" in name
+            }
 
-        mira_devices = []
-        for device in devices:
-            if device.name and "Mira" in device.name:
-                mira_devices.append((device.address, device.name))
+            if not mira_devices:
+                return self.async_abort(reason="no_devices_found")
 
-        if not mira_devices:
-            errors["base"] = "no_mira_devices"
+            self._device_options = mira_devices
 
-        schema = vol.Schema({
-            vol.Required("devices"): cv.multi_select({
-                addr: name for addr, name in mira_devices
-            })
-        })
+            return self.async_show_form(
+                step_id="user",
+                data_schema=vol.Schema({
+                    vol.Required(CONF_DEVICE): vol.In(mira_devices)
+                }),
+                errors=errors,
+                description_placeholders={
+                    "instruction": "Select shower or bath device to monitor and control"
+                },
+            )
 
-        return self.async_show_form(
-            step_id="user",
-            data_schema=schema,
-            description_placeholders={
-                "instruction": "Select shower or bath device(s) to monitor and control"
-            },
-            errors=errors
+        # User selected a device by name
+        device_name = user_input[CONF_DEVICE]
+        device_address = self._device_options[device_name]
+
+        # Pair the client
+        try:
+            client_id, client_slot = await self.hass.async_add_executor_job(
+                pair_client, device_address, device_name
+            )
+        except Exception as e:
+            _LOGGER.exception("Failed to pair with Mira device")
+            errors["base"] = "pairing_failed"
+            return self.async_show_form(
+                step_id="user",
+                data_schema=vol.Schema({
+                    vol.Required(CONF_DEVICE): vol.In(self._device_options)
+                }),
+                errors=errors,
+            )
+
+        # Success — store config entry
+        return self.async_create_entry(
+            title=device_name,
+            data={
+                "device_name": device_name,
+                "device_address": device_address,
+                "client_id": client_id,
+                "client_slot": client_slot,
+            }
         )
