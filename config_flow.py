@@ -19,14 +19,18 @@ class SoakStationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         scanner = async_get_scanner(self.hass)
         devices = await scanner.discover(timeout=5.0)
 
-        # Build a list of device choices
-        choices = {
-            device.address: f"{device.name or 'Unknown'} ({device.address})"
-            for device in devices
-        }
+        mira_devices = []
+        for device in devices:
+            if device.name and "Mira" in device.name:
+                mira_devices.append((device.address, device.name))
+
+        if not mira_devices:
+            errors["base"] = "no_mira_devices"
 
         schema = vol.Schema({
-            vol.Required("devices"): cv.multi_select(choices)
+            vol.Required("devices"): cv.multi_select({
+                addr: name for addr, name in mira_devices
+            })
         })
 
         return self.async_show_form(
