@@ -5,7 +5,15 @@
   "documentation": "https://github.com/martingrayson/soak_station",
   "config_flow": true,
   "dependencies": [],
-  "codeowners": ["@martingrayson"],
-  "requirements": ["aiohttp"],
+  "codeowners": [
+    "@martingrayson"
+  ],
+  "requirements": [
+    "aiohttp",
+    "pexpect",
+    "simplepyble",
+    "retrying",
+    "setuptools"
+  ],
   "icon": "icon.png"
 }
