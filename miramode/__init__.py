@@ -139,7 +139,7 @@ class NotificationsBase():
         pass
 
 
-class Connnection:
+class Connection:
     def __init__(self, address, client_id=None, client_slot=None):
         self._address = address
         self._peripheral = None
