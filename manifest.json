@@ -10,9 +10,9 @@
   ],
   "requirements": [
     "aiohttp",
-    "pexpect==4.9.0",
-    "simplepyble==0.10.1",
-    "retrying==1.3.4"
+    "pexpect",
+    "simplepyble",
+    "retrying"
   ],
   "icon": "icon.png"
 }

@@ -1,50 +1,84 @@
-from homeassistant.components.binary_sensor import BinarySensorEntity
-from homeassistant.const import STATE_ON, STATE_OFF
-from homeassistant.components.bluetooth import async_ble_device_from_address
+from __future__ import annotations
+
+import logging
+from homeassistant.components.binary_sensor import (
+    BinarySensorEntity,
+    BinarySensorDeviceClass,
+)
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+
 from .const import DOMAIN
+from .miramode_utils import update_outlet_state_from_device
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
-    devices = config_entry.data.get("devices", [])
-    entities = []
+_LOGGER = logging.getLogger(__name__)
 
-    for address in devices:
-        ble_device = async_ble_device_from_address(hass, address)
-        name = ble_device.name if ble_device else address
-        entities.append(SoakStationConnectionSensor(config_entry.entry_id, address, name))
-        entities.append(SoakStationOutletSensor(config_entry.entry_id, address, name, outlet=1))
-        entities.append(SoakStationOutletSensor(config_entry.entry_id, address, name, outlet=2))
 
-    async_add_entities(entities)
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up binary sensors from config entry."""
+    data = config_entry.data
+    address = data["device"]
+    client_id = data["client_id"]
+    client_slot = data["client_slot"]
 
-class SoakStationConnectionSensor(BinarySensorEntity):
-    def __init__(self, entry_id, address, name):
+    sensors = [
+        SoakStationOutletBinarySensor(hass, address, client_id, client_slot, outlet_num=1),
+        SoakStationOutletBinarySensor(hass, address, client_id, client_slot, outlet_num=2),
+        SoakStationConnectionSensor(hass, address, client_id, client_slot),
+    ]
+
+    async_add_entities(sensors)
+
+
+class SoakStationOutletBinarySensor(BinarySensorEntity):
+    def __init__(self, hass, address, client_id, client_slot, outlet_num):
+        self.hass = hass
         self._address = address
-        self._state = True
-        self._attr_name = f"{name} Connected"
-        self._attr_unique_id = f"{entry_id}_connected_{address.replace(':', '')}"
-        self._attr_device_class = "connectivity"
-        self._attr_icon = "mdi:bluetooth-connect"
+        self._client_id = client_id
+        self._client_slot = client_slot
+        self._outlet_num = outlet_num
 
-    async def async_update(self):
-        self._state = True  # Simulate always connected
-
-    @property
-    def is_on(self):
-        return self._state
-
-class SoakStationOutletSensor(BinarySensorEntity):
-    def __init__(self, entry_id, address, name, outlet=1):
-        self._address = address
-        self._outlet = outlet
-        self._state = False
-        self._attr_name = f"{name} Outlet {outlet}"
-        self._attr_unique_id = f"{entry_id}_outlet{outlet}_{address.replace(':', '')}"
-        self._attr_device_class = "power"
+        self._attr_name = f"SoakStation Outlet {outlet_num}"
+        self._attr_unique_id = f"soakstation_outlet{outlet_num}_{address.replace(':', '')}"
+        self._attr_device_class = BinarySensorDeviceClass.RUNNING
         self._attr_icon = "mdi:shower-head"
 
     async def async_update(self):
-        self._state = self._outlet == 1  # Simulate outlet 1 ON, outlet 2 OFF
+        """Update state from Mira device."""
+        is_on = await self.hass.async_add_executor_job(
+            update_outlet_state_from_device,
+            self._address,
+            self._client_id,
+            self._client_slot,
+            self._outlet_num
+        )
+        self._attr_is_on = is_on
 
-    @property
-    def is_on(self):
-        return self._state
+
+class SoakStationConnectionSensor(BinarySensorEntity):
+    def __init__(self, hass, address, client_id, client_slot):
+        self.hass = hass
+        self._address = address
+        self._client_id = client_id
+        self._client_slot = client_slot
+
+        self._attr_name = f"SoakStation Connected ({address})"
+        self._attr_unique_id = f"soakstation_connection_{address.replace(':', '')}"
+        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+        self._attr_icon = "mdi:bluetooth-connect"
+
+    async def async_update(self):
+        """Set connection status to True if device is in Bluetooth range."""
+        from miramode import get_available_devices
+
+        def check_presence():
+            devices = get_available_devices()
+            return any(addr.lower() == self._address.lower() for _, addr in devices)
+
+        in_range = await self.hass.async_add_executor_job(check_presence)
+        self._attr_is_on = in_range
