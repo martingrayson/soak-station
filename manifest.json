@@ -9,10 +9,7 @@
     "@martingrayson"
   ],
   "requirements": [
-    "aiohttp",
-    "pexpect",
-    "simplepyble",
-    "retrying"
+    "aiohttp"
   ],
   "icon": "icon.png"
 }
