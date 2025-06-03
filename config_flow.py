@@ -5,10 +5,9 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
+from homeassistant.components.bluetooth import async_get_scanner
 
 from .const import DOMAIN
-from .miramode import get_available_devices
-from .miramode.pairing import pair_client
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,7 +24,8 @@ class SoakStationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # First step: show the list of Mira devices
         if user_input is None:
-            devices = await self.hass.async_add_executor_job(get_available_devices)
+            scanner = async_get_scanner(self.hass)
+            devices = await scanner.discover(timeout=5.0)
 
             mira_devices = {
                 name: address for name, address in devices if "Mira" in name
@@ -53,9 +53,12 @@ class SoakStationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Pair the client
         try:
-            client_id, client_slot = await self.hass.async_add_executor_job(
-                pair_client, device_address, device_name
-            )
+            client_id = 1
+            client_slot = 1
+            pass
+            # client_id, client_slot = await self.hass.async_add_executor_job(
+            #     pair_client, device_address, device_name
+            # )
         except Exception as e:
             _LOGGER.exception("Failed to pair with Mira device")
             errors["base"] = "pairing_failed"

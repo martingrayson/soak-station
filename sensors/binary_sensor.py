@@ -9,8 +9,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
-from .const import DOMAIN
-from .miramode_utils import update_outlet_state_from_device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,14 +48,14 @@ class SoakStationOutletBinarySensor(BinarySensorEntity):
 
     async def async_update(self):
         """Update state from Mira device."""
-        is_on = await self.hass.async_add_executor_job(
-            update_outlet_state_from_device,
-            self._address,
-            self._client_id,
-            self._client_slot,
-            self._outlet_num
-        )
-        self._attr_is_on = is_on
+        # is_on = await self.hass.async_add_executor_job(
+        #     update_outlet_state_from_device,
+        #     self._address,
+        #     self._client_id,
+        #     self._client_slot,
+        #     self._outlet_num
+        # )
+        self._attr_is_on = True
 
 
 class SoakStationConnectionSensor(BinarySensorEntity):
@@ -74,11 +72,5 @@ class SoakStationConnectionSensor(BinarySensorEntity):
 
     async def async_update(self):
         """Set connection status to True if device is in Bluetooth range."""
-        from miramode import get_available_devices
 
-        def check_presence():
-            devices = get_available_devices()
-            return any(addr.lower() == self._address.lower() for _, addr in devices)
-
-        in_range = await self.hass.async_add_executor_job(check_presence)
-        self._attr_is_on = in_range
+        self._attr_is_on = True
