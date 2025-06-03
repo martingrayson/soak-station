@@ -40,8 +40,8 @@ class SoakStationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.show_selection_form(errors, mira_devices)
 
         # User selected a device by name
-        device_name = user_input[CONF_DEVICE]
-        device_address = self._device_options[device_name]
+        device_address = user_input[CONF_DEVICE]
+        device_name = self._device_options[device_address]
 
         # Pair the client
         try:
