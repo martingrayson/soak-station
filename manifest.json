@@ -11,5 +11,6 @@
   "requirements": [
     "aiohttp"
   ],
-  "icon": "icon.png"
+  "icon": "icon.png",
+  "supported_platforms": ["sensor", "binary_sensor"]
 }

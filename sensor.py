@@ -4,6 +4,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+
 async def async_setup_entry(
         hass: HomeAssistant,
         config_entry: ConfigEntry,
@@ -16,15 +17,16 @@ async def async_setup_entry(
     device_name = data["device_name"]
 
     sensors = [
-        SoakStationTempSensor(address, "target_temp", "Target Temperature"),
-        SoakStationTempSensor(address, "actual_temp", "Actual Temperature"),
-        SoakStationTimerStateSensor(address),
-        SoakStationTimerRemainingSensor(address),
+        SoakStationTempSensor(address, device_name, "target_temp", "Target Temperature"),
+        SoakStationTempSensor(address, device_name, "actual_temp", "Actual Temperature"),
+        SoakStationTimerStateSensor(address, device_name),
+        SoakStationTimerRemainingSensor(address, device_name),
     ]
     async_add_entities(sensors)
 
+
 class SoakStationTempSensor(SensorEntity):
-    def __init__(self, address, kind, name, device_name):
+    def __init__(self, address, device_name, kind, name):
         self._address = address
         self._kind = kind
         self._device_name = device_name
@@ -42,6 +44,7 @@ class SoakStationTempSensor(SensorEntity):
     def native_value(self):
         return self._state
 
+
 class SoakStationTimerStateSensor(SensorEntity):
     def __init__(self, address, device_name):
         self._address = address
@@ -52,11 +55,12 @@ class SoakStationTimerStateSensor(SensorEntity):
         self._state = None
 
     async def async_update(self):
-        self._state = "running" 
+        self._state = "running"
 
     @property
     def native_value(self):
         return self._state
+
 
 class SoakStationTimerRemainingSensor(SensorEntity):
     def __init__(self, address, device_name):
@@ -70,7 +74,7 @@ class SoakStationTimerRemainingSensor(SensorEntity):
         self._state = None
 
     async def async_update(self):
-        self._state = 120 
+        self._state = 120
 
     @property
     def native_value(self):
