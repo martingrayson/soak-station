@@ -42,7 +42,7 @@ class SoakStationOutletBinarySensor(BinarySensorEntity):
         self._client_slot = client_slot
         self._outlet_num = outlet_num
 
-        self._attr_name = f"SoakStation Outlet {outlet_num} ({device_name})"
+        self._attr_name = f"Outlet {outlet_num} ({device_name})"
         self._attr_unique_id = f"soakstation_outlet{outlet_num}_{address.replace(':', '')}"
         self._attr_device_class = BinarySensorDeviceClass.RUNNING
         self._attr_icon = "mdi:shower-head"
@@ -67,7 +67,7 @@ class SoakStationConnectionSensor(BinarySensorEntity):
         self._client_id = client_id
         self._client_slot = client_slot
 
-        self._attr_name = f"SoakStation Connected ({device_name})"
+        self._attr_name = f"Connected ({device_name})"
         self._attr_unique_id = f"soakstation_connection_{address.replace(':', '')}"
         self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
         self._attr_icon = "mdi:bluetooth-connect"

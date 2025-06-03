@@ -1,26 +1,34 @@
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import UnitOfTemperature
+from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+async def async_setup_entry(
+        hass: HomeAssistant,
+        config_entry: ConfigEntry,
+        async_add_entities: AddEntitiesCallback,
+) -> None:
+    data = config_entry.data
+    address = data["device_address"]
+    client_id = data["client_id"]
+    client_slot = data["client_slot"]
+    device_name = data["device_name"]
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
-    devices = config_entry.data.get("devices", [])
-    sensors = []
-
-    for address in devices:
-        sensors.extend([
-            SoakStationTempSensor(address, "target_temp", "Target Temperature"),
-            SoakStationTempSensor(address, "actual_temp", "Actual Temperature"),
-            SoakStationTimerStateSensor(address),
-            SoakStationTimerRemainingSensor(address),
-        ])
-    
+    sensors = [
+        SoakStationTempSensor(address, "target_temp", "Target Temperature"),
+        SoakStationTempSensor(address, "actual_temp", "Actual Temperature"),
+        SoakStationTimerStateSensor(address),
+        SoakStationTimerRemainingSensor(address),
+    ]
     async_add_entities(sensors)
 
 class SoakStationTempSensor(SensorEntity):
-    def __init__(self, address, kind, name):
+    def __init__(self, address, kind, name, device_name):
         self._address = address
         self._kind = kind
-        self._attr_name = f"{name} ({address})"
+        self._device_name = device_name
+        self._attr_name = f"{name} ({device_name})"
         self._attr_unique_id = f"soakstation_{kind}_{address.replace(':', '')}"
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_device_class = "temperature"
@@ -35,9 +43,10 @@ class SoakStationTempSensor(SensorEntity):
         return self._state
 
 class SoakStationTimerStateSensor(SensorEntity):
-    def __init__(self, address):
+    def __init__(self, address, device_name):
         self._address = address
-        self._attr_name = f"Timer State ({address})"
+        self._device_name = device_name
+        self._attr_name = f"Timer State ({device_name})"
         self._attr_unique_id = f"soakstation_timerstate_{address.replace(':', '')}"
         self._attr_icon = "mdi:timer-outline"
         self._state = None
@@ -50,9 +59,10 @@ class SoakStationTimerStateSensor(SensorEntity):
         return self._state
 
 class SoakStationTimerRemainingSensor(SensorEntity):
-    def __init__(self, address):
+    def __init__(self, address, device_name):
         self._address = address
-        self._attr_name = f"Timer Remaining ({address})"
+        self._device_name = device_name
+        self._attr_name = f"Timer Remaining ({device_name})"
         self._attr_unique_id = f"soakstation_timerremaining_{address.replace(':', '')}"
         self._attr_native_unit_of_measurement = "s"
         self._attr_device_class = "duration"
