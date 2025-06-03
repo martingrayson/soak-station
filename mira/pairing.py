@@ -1,6 +1,6 @@
 import random
 import threading
-from mira.helpers.connection import Connection
+from .helpers.connection import Connection
 
 def pair_client(client_id, client_name, address, hass):
     with Connection(hass, address) as conn:
