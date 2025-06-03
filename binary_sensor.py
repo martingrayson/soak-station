@@ -4,7 +4,6 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
-from .mira.sensors.connection_binary_sensor import SoakStationConnectionSensor
 from .mira.sensors.outlet_binary_sensor import SoakStationOutletBinarySensor
 from .const import DOMAIN
 
@@ -25,8 +24,7 @@ async def async_setup_entry(
 
     sensors = [
         SoakStationOutletBinarySensor(hass, connection, device_name, address, client_id, client_slot, outlet_num=1),
-        SoakStationOutletBinarySensor(hass, connection, device_name, address, client_id, client_slot, outlet_num=2),
-        SoakStationConnectionSensor(hass, connection, device_name, address, client_id, client_slot),
+        SoakStationOutletBinarySensor(hass, connection, device_name, address, client_id, client_slot, outlet_num=2)
     ]
 
     async_add_entities(sensors)

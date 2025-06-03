@@ -5,7 +5,9 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
 from homeassistant.components.bluetooth import async_get_scanner
 
+from . import Connection
 from .const import DOMAIN
+from .mira.config_helper import config_flow_pairing
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,11 +34,11 @@ class SoakStationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     mira_devices[device.address] = name
 
             if not mira_devices:
-                return self.async_abort(reason="no_devices_found")
+                return self.async_abort(reason="no_devices_found") # type: ignore
 
             self._device_options = mira_devices
 
-            return await self.show_selection_form(errors, mira_devices)
+            return await self.show_selection_form(errors, mira_devices) # type: ignore
 
         # User selected a device by name
         device_address = user_input[CONF_DEVICE]
@@ -44,25 +46,20 @@ class SoakStationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Pair the client
         try:
-            client_id = 1
-            client_slot = 1
-            pass
-            # client_id, client_slot = await self.hass.async_add_executor_job(
-            #     pair_client, device_address, device_name
-            # )
+            client_id = await config_flow_pairing (self.hass, device_address)
         except Exception as e:
             _LOGGER.exception("Failed to pair with Mira device")
             errors["base"] = "pairing_failed"
-            return self.show_selection_form(errors, mira_devices)
+            return await self.show_selection_form(errors, mira_devices) # type: ignore
 
         # Success — store config entry
-        return self.async_create_entry(
+        return self.async_create_entry( # type: ignore
             title=device_name,
             data={
                 "device_name": device_name,
                 "device_address": device_address,
                 "client_id": client_id,
-                "client_slot": client_slot,
+                "client_slot": -1, # TODO: We need to figure out how to get slots
             }
         )
 
