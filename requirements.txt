@@ -1,1 +1,2 @@
 # These arent used by home assistant, the manifest.json is!
+homeassistant
