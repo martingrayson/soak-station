@@ -27,28 +27,47 @@ class Connection:
         self._client_slot = client_slot
         self._client = None
 
+        self._response_event = asyncio.Event()
+        self._response_data = None
+
     def set_client_data(self, client_id, client_slot):
         self._client_id = client_id
         self._client_slot = client_slot
 
-    @retrying.retry(stop_max_attempt_number=10)
-    async def connect(self):
-        self._peripheral: BLEDevice = async_ble_device_from_address(self._hass, self._address,
-                                                                              connectable=True)
-        self._client = bleak.BleakClient(self._peripheral)
-        await self._client.connect()
+    async def connect(self, retries=10, delay=1.0):
+        for attempt in range(retries):
+            try:
+                self._peripheral = async_ble_device_from_address(
+                    self._hass, self._address, connectable=True
+                )
+                if not self._peripheral:
+                    raise Exception("Device not found")
+
+                self._client = bleak.BleakClient(self._peripheral)
+                await self._client.connect()
+                return
+            except Exception as e:
+                if attempt == retries - 1:
+                    raise
+                await asyncio.sleep(delay)
 
 
     async def disconnect(self):
         self._peripheral = None
-        await self._client.disconnect()
+        if self._client and self._client.is_connected:
+            await self._client.disconnect()
 
     async def __aenter__(self):
-        self.connect()
+        await self.connect()
         return self
 
     async def __aexit__(self, type, value, traceback):
-        self.disconnect()
+        await self.disconnect()
+
+    def _handle_notification(self, sender, data: bytearray):
+        logger.debug(f"Notification from {sender}: {data}")
+        self._response_data = data
+        self._response_event.set()
 
     async def pair_client(self, new_client_id, client_name):
         new_client_id_bytes = struct.pack(">I", new_client_id)
@@ -59,9 +78,33 @@ class Connection:
 
         client_name_bytes += bytearray([0] * (20 - len(client_name_bytes)))
 
-        payload = (bytearray([0, 0xeb, 24]) + new_client_id_bytes +
-                   client_name_bytes)
-        await self._write_chunks(_get_payload_with_crc(payload, MAGIC_ID))
+        payload = bytearray([0, 0xEB, 24]) + new_client_id_bytes + client_name_bytes
+        full_payload = _get_payload_with_crc(payload, MAGIC_ID)
+
+        # Clear previous response
+        self._response_event.clear()
+        self._response_data = None
+
+        # Subscribe to notifications before writing
+        await self._client.start_notify(UUID_READ, self._handle_notification)
+
+        try:
+            await self._write_chunks(full_payload)
+
+            try:
+                await asyncio.wait_for(self._response_event.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                raise Exception("No response received from device after pairing")
+
+            resp = self._response_data
+            if resp is bytearray:
+                return resp[0] - 0x40
+            else:
+                return None
+
+        finally:
+            await self._client.stop_notify(UUID_READ)
+
 
     async def _read(self, characteristic):
         return await self._client.read_gatt_char(characteristic)

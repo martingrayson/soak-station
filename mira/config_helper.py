@@ -10,16 +10,17 @@ async def config_flow_pairing(hass, address, client_id=None, client_name="homeas
     if not new_client_id:
         new_client_id = generate_client_id()
 
-    logger.warning(f"Pairing new client id: {new_client_id}, "
-          f"name: {client_name}")
 
     await conn.connect()
     try:
-        await conn.pair_client(new_client_id, client_name)
+        client_slot = await conn.pair_client(new_client_id, client_name)
     finally:
         await conn.disconnect()
 
-    return new_client_id
+    logger.warning(f"Pairing new client id: {new_client_id}, "
+          f"client_slot: {client_slot}")
+
+    return new_client_id, client_slot
 
 
 def generate_client_id():

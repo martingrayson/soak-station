@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Mira Device Setup",
+        "description": "Select your Mira shower or bath device to monitor and control. Make sure the device is in pairing mode before continuing.",
+        "data": {
+          "device": "Device"
+        },
+        "error": {
+          "pairing_failed": "Pairing failed. Please ensure the device is in pairing mode and within range."
+        }
+      }
+    }
+  }
+}

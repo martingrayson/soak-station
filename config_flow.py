@@ -46,20 +46,21 @@ class SoakStationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Pair the client
         try:
-            client_id = await config_flow_pairing (self.hass, device_address)
+            client_id, client_slot = await config_flow_pairing (self.hass, device_address)
         except Exception as e:
             _LOGGER.exception("Failed to pair with Mira device")
             errors["base"] = "pairing_failed"
             return await self.show_selection_form(errors, mira_devices) # type: ignore
 
         # Success — store config entry
+
         return self.async_create_entry( # type: ignore
             title=device_name,
             data={
                 "device_name": device_name,
                 "device_address": device_address,
                 "client_id": client_id,
-                "client_slot": -1, # TODO: We need to figure out how to get slots
+                "client_slot": client_slot,
             }
         )
 
@@ -69,10 +70,7 @@ class SoakStationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({
                 vol.Required(CONF_DEVICE): vol.In(mira_devices)
             }),
-            errors=errors,
-            description_placeholders={
-                "instruction": "Select shower or bath device to monitor and control"
-            },
+            errors=errors
         )
 
 

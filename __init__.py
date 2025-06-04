@@ -5,7 +5,7 @@ from .const import DOMAIN
 async def async_setup_entry(hass, config_entry):
     device_address = config_entry.data["device_address"]
     connection = Connection(hass, device_address)
-    await hass.async_add_executor_job(connection.connect)
+    await connection.connect()
 
     hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {
         "connection": connection,
