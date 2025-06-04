@@ -16,15 +16,13 @@ async def async_setup_entry(
 ) -> None:
     data = config_entry.data
     address = data["device_address"]
-    client_id = data["client_id"]
-    client_slot = data["client_slot"]
     device_name = data["device_name"]
 
-    connection = hass.data[DOMAIN][config_entry.entry_id]["connection"]
+    config_data = hass.data[DOMAIN][config_entry.entry_id]["data"]
 
     sensors = [
-        SoakStationOutletBinarySensor(hass, connection, device_name, address, client_id, client_slot, outlet_num=1),
-        SoakStationOutletBinarySensor(hass, connection, device_name, address, client_id, client_slot, outlet_num=2)
+        SoakStationOutletBinarySensor(hass, config_data, device_name, address, outlet_num=1),
+        SoakStationOutletBinarySensor(hass, config_data, device_name, address, outlet_num=2)
     ]
 
     async_add_entities(sensors)

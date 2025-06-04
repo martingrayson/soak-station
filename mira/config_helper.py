@@ -1,6 +1,7 @@
 import logging
 import random
 from .helpers.connection import Connection
+from .helpers.notifications import Notifications
 
 logger = logging.getLogger(__name__)
 
@@ -13,14 +14,16 @@ async def config_flow_pairing(hass, address, client_id=None, client_name="homeas
 
     await conn.connect()
     try:
-        client_slot = await conn.pair_client(new_client_id, client_name)
+        notifications = Notifications(is_pairing=True)
+        client_id_out, client_slot = await conn.pair_client(new_client_id, client_name, notifications)
+
     finally:
         await conn.disconnect()
 
-    logger.warning(f"Pairing new client id: {new_client_id}, "
+    logger.warning(f"Pairing new client id: {client_id_out}, "
           f"client_slot: {client_slot}")
 
-    return new_client_id, client_slot
+    return client_id_out, client_slot
 
 
 def generate_client_id():

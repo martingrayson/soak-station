@@ -1,9 +1,9 @@
 import asyncio
 import logging
 import struct
+from typing import Optional
 
 import bleak
-import retrying
 from bleak import BLEDevice
 from homeassistant.components.bluetooth import (
     async_ble_device_from_address
@@ -11,9 +11,8 @@ from homeassistant.components.bluetooth import (
 
 from .const import MAGIC_ID, TIMER_RUNNING, OUTLET_RUNNING, OUTLET_STOPPED, TIMER_PAUSED, \
     UUID_DEVICE_NAME, UUID_MANUFACTURER, UUID_MODEL_NUMBER, UUID_READ, UUID_WRITE
-from .generic import _get_payload_with_crc, _convert_temperature, _convert_temperature_reverse, \
-    _bits_to_list, _format_bytearray, _split_chunks
-
+from .generic import _get_payload_with_crc, _convert_temperature, _format_bytearray, _split_chunks
+from .notifications import Notifications
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +21,19 @@ class Connection:
     def __init__(self, hass, address, client_id=None, client_slot=None):
         self._hass = hass
         self._address = address
-        self._peripheral: BLEDevice = None
+        self._peripheral: Optional[BLEDevice] = None
         self._client_id = client_id
         self._client_slot = client_slot
         self._client = None
+        self._notifications = None
 
         self._response_event = asyncio.Event()
         self._response_data = None
+
+        # For packet reassembly
+        self.partial_payload = bytearray()
+        self.client_slot = None
+        self.expected_payload_length = None
 
     def set_client_data(self, client_id, client_slot):
         self._client_id = client_id
@@ -64,12 +69,67 @@ class Connection:
     async def __aexit__(self, type, value, traceback):
         await self.disconnect()
 
-    def _handle_notification(self, sender, data: bytearray):
-        logger.debug(f"Notification from {sender}: {data}")
-        self._response_data = data
-        self._response_event.set()
+    def _handle_notification(self, data: bytearray, notifications: Notifications):
+        logger.warning(f"Notification received: {_format_bytearray(data)}")
 
-    async def pair_client(self, new_client_id, client_name):
+        if len(data) < 3:
+            logger.warning(f"Invalid packet length: {len(data)}")
+            return
+
+        client_slot = data[0] - 0x40
+        payload_length = data[2]
+        payload = data[3:]
+
+        if len(payload) != payload_length:
+            logger.warning(f"Expected {payload_length} bytes, got {len(payload)}")
+            return
+
+        notifications.handle_packet(client_slot, payload_length, payload)
+
+    def subscribe(self, notifications):
+        """Subscribe to notifications and route to the given Notifications handler."""
+        self._notifications = notifications
+
+        async def handle(sender, data):
+            logger.debug(f"Received data from {sender}: {data}")
+
+            if len(self.partial_payload) > 0:
+                self.partial_payload.extend(data)
+                payload = self.partial_payload
+                client_slot = self.client_slot
+                payload_length = self.expected_payload_length
+
+                self.partial_payload = bytearray()
+                self.client_slot = None
+                self.expected_payload_length = None
+            else:
+                if len(data) < 3:
+                    logger.warning(f"Ignoring too-short packet: {data}")
+                    return
+
+                client_slot = data[0] - 0x40
+                payload_length = data[2]
+                payload = data[3:]
+
+            if len(payload) < payload_length:
+                self.client_slot = client_slot
+                self.expected_payload_length = payload_length
+                self.partial_payload.extend(payload)
+                return
+
+            if len(payload) != payload_length:
+                logger.warning(
+                    f"Payload length mismatch: expected {payload_length}, got {len(payload)}"
+                )
+                return
+
+            self._notifications.handle_packet(client_slot, payload_length, payload)
+
+        # Start notification listener
+        asyncio.create_task(self._client.start_notify(UUID_READ, handle))
+
+    async def pair_client(self, new_client_id, client_name, notifications: Notifications):
+        logger.warning(f"Pairing client {new_client_id} with {client_name}")
         new_client_id_bytes = struct.pack(">I", new_client_id)
         client_name_bytes = client_name.encode("UTF-8")
 
@@ -77,7 +137,6 @@ class Connection:
             raise Exception("The client name is too long")
 
         client_name_bytes += bytearray([0] * (20 - len(client_name_bytes)))
-
         payload = bytearray([0, 0xEB, 24]) + new_client_id_bytes + client_name_bytes
         full_payload = _get_payload_with_crc(payload, MAGIC_ID)
 
@@ -86,22 +145,20 @@ class Connection:
         self._response_data = None
 
         # Subscribe to notifications before writing
-        await self._client.start_notify(UUID_READ, self._handle_notification)
+        logger.warning(f"Pairing ... awaiting notify")
+        await self._client.start_notify(UUID_READ, lambda _, data: self._handle_notification(data, notifications))
 
         try:
+            notifications.reset()
             await self._write_chunks(full_payload)
 
             try:
-                await asyncio.wait_for(self._response_event.wait(), timeout=5.0)
+                await asyncio.wait_for(notifications.wait(), timeout=5.0)
             except asyncio.TimeoutError:
                 raise Exception("No response received from device after pairing")
 
-            resp = self._response_data
-            if resp is bytearray:
-                return resp[0] - 0x40
-            else:
-                return None
-
+            logger.warning(f"{new_client_id}, {notifications.client_slot}")
+            return new_client_id, notifications.client_slot
         finally:
             await self._client.stop_notify(UUID_READ)
 
@@ -116,153 +173,6 @@ class Connection:
     async def _write(self, data):
         logger.debug(f"Writing data: {_format_bytearray(data)}")
         await self._client.write_gatt_char(UUID_WRITE, bytes(data), response=False)
-
-    # def _get_service_for_characteristic(self, characteristic):
-    #     services = self._peripheral.services()
-    #     for service in services:
-    #         for c in service.characteristics():
-    #             logger.debug(f'Found service: "{service.uuid()}", '
-    #                          f'characteristic: "{c.uuid()}"')
-    #             if c.uuid() == characteristic:
-    #                 return service.uuid()
-    #     raise Exception(f"Characteristic not found: {characteristic}")
-
-    # def subscribe(self, notifications):
-    #     notifications.partial_payload = bytearray()
-    #     notifications.client_slot = None
-    #     notifications.expected_payload_length = None
-    #
-    #     service = self._get_service_for_characteristic(UUID_READ)
-    #
-    #     self._peripheral.notify(
-    #         service, UUID_READ, lambda value: self._handle_data(
-    #             value, notifications))
-
-    def _handle_data(self, value, notifications):
-        if len(notifications.partial_payload) > 0:
-            notifications.partial_payload.extend(value)
-            client_slot = notifications.client_slot
-            payload = notifications.partial_payload
-            payload_length = notifications.expected_payload_length
-
-            notifications.partial_payload = bytearray()
-            notifications.client_slot = None
-            notifications.expected_payload_length = None
-        else:
-            if len(value) < 2:
-                logger.warning(
-                    f"Packet length is too short, skipping: {len(value)}")
-                return
-
-            client_slot = value[0] - 0x40
-            payload_length = value[2]
-            payload = value[3:]
-
-        if len(payload) < payload_length:
-            notifications.client_slot = client_slot
-            notifications.expected_payload_length = payload_length
-            notifications.partial_payload.extend(payload)
-            return
-
-        if len(payload) != payload_length:
-            logger.warning(
-                "Inconsistent payload length, skipping: "
-                f"{payload_length}, {len(payload)}")
-            return
-
-        logger.debug(
-            f"Payload length: {payload_length}, "
-            f"payload : {_format_bytearray(payload)}")
-
-        if payload_length == 1:
-            notifications.success_or_failure(client_slot, payload[0])
-
-        elif payload_length == 2:
-            slots = []
-            slot_bits = struct.unpack(">H", payload)[0]
-            slots = _bits_to_list(slot_bits, 16)
-
-            notifications.slots(client_slot, slots)
-
-        elif payload_length == 4:
-            outlet_enabled = _bits_to_list(payload[1], 8)
-            default_preset_slot = payload[2]
-            controller_senntings = _bits_to_list(payload[3], 8)
-
-            notifications.device_settings(
-                client_slot, outlet_enabled, default_preset_slot,
-                controller_senntings)
-
-        elif payload_length == 10:
-            timer_state = payload[0]
-            target_temperature = _convert_temperature_reverse(payload[1:3])
-            actual_temperature = _convert_temperature_reverse(payload[3:5])
-            outlet_state_1 = payload[5] == OUTLET_RUNNING
-            outlet_state_2 = payload[6] == OUTLET_RUNNING
-            remaining_seconds = struct.unpack(">H", payload[7:9])[0]
-            successful_update_command_counter = payload[9]
-
-            notifications.device_state(
-                client_slot, timer_state, target_temperature,
-                actual_temperature, outlet_state_1, outlet_state_2,
-                remaining_seconds, successful_update_command_counter)
-
-        elif payload_length == 11 and payload[0] in [1, 0x80]:
-            change_made = payload[0] == 1
-            timer_state = payload[1]
-            target_temperature = _convert_temperature_reverse(payload[2:4])
-            actual_temperature = _convert_temperature_reverse(payload[4:6])
-            outlet_state_1 = payload[6] == OUTLET_RUNNING
-            outlet_state_2 = payload[7] == OUTLET_RUNNING
-            remaining_seconds = struct.unpack(">H", payload[8:10])[0]
-            successful_update_command_counter = payload[10]
-
-            notifications.controls_operated(
-                client_slot, change_made, timer_state, target_temperature,
-                actual_temperature, outlet_state_1, outlet_state_2,
-                remaining_seconds, successful_update_command_counter)
-
-        elif payload_length == 11 and payload[0] in [0, 0x4, 0x8]:
-            outlet_flag = payload[0]
-            min_duration_seconds = payload[4]
-            max_temperature = _convert_temperature_reverse(payload[5:7])
-            min_temperature = _convert_temperature_reverse(payload[7:9])
-            successful_update_command_counter = payload[10]
-
-            notifications.outlet_settings(
-                client_slot, outlet_flag, min_duration_seconds,
-                max_temperature, min_temperature,
-                successful_update_command_counter)
-
-        elif payload_length == 16 and payload[0] == 0:
-            valve_type = payload[1]
-            valve_sw_version = payload[3]
-            ui_type = payload[5]
-            ui_sw_version = payload[7]
-            bt_sw_version = payload[15]
-
-            notifications.technical_information(
-                client_slot, valve_type, valve_sw_version, ui_type,
-                ui_sw_version, bt_sw_version)
-
-        elif payload_length == 16 and payload[0] != 0:
-            nickname = payload.decode('UTF-8')
-            notifications.nickname(client_slot, nickname)
-
-        elif payload_length == 20:
-            client_name = payload.decode('UTF-8')
-            notifications.client_details(client_slot, client_name)
-
-        elif payload_length == 24:
-            preset_slot = payload[0]
-            target_temperature = _convert_temperature_reverse(payload[1:3])
-            duration_seconds = payload[4]
-            outlet_enabled = _bits_to_list(payload[5], 8)
-            preset_name = payload[8:].decode('UTF-8')
-
-            notifications.preset_details(
-                client_slot, preset_slot, target_temperature, duration_seconds,
-                outlet_enabled, preset_name)
 
     async def get_device_info(self):
         device_name = (await self._read(UUID_DEVICE_NAME).decode('UTF-8'))

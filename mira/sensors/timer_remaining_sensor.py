@@ -1,21 +1,29 @@
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
 
 class SoakStationTimerRemainingSensor(SensorEntity):
-    def __init__(self, hass, connection, address, device_name):
+    def __init__(self, hass, data, address, device_name):
         self._hass = hass
-        self._connection = connection
+        self._data = data
         self._address = address
         self._device_name = device_name
         self._attr_name = f"Timer Remaining ({device_name})"
         self._attr_unique_id = f"soakstation_timerremaining_{address.replace(':', '')}"
         self._attr_native_unit_of_measurement = "s"
-        self._attr_device_class = "duration"
+        self._attr_device_class = SensorDeviceClass.DURATION
         self._attr_icon = "mdi:timer-sand"
         self._state = None
+        self._data.subscribe(self._update_from_model)
+
+    def _update_from_model(self):
+        new_state = self._data.remaining_seconds
+        # Only update HA state if it changed
+        if self._state != new_state:
+            self._state = new_state
+            self.async_write_ha_state()
 
     async def async_update(self):
-        """ The time remaining on the timer """
-        self._state = 120
+        # This is only used when HA explicitly polls
+        self._update_from_model()
 
     @property
     def native_value(self):

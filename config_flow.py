@@ -1,13 +1,11 @@
 import logging
 import voluptuous as vol
+from .const import DOMAIN
+
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
 from homeassistant.components.bluetooth import async_get_scanner
-
-from . import Connection
-from .const import DOMAIN
-from .mira.config_helper import config_flow_pairing
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,6 +18,9 @@ class SoakStationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None) -> FlowResult:
+
+        from .mira.config_helper import config_flow_pairing
+
         errors = {}
 
         mira_devices = {}
