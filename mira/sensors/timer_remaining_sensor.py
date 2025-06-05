@@ -1,9 +1,10 @@
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
 
 class SoakStationTimerRemainingSensor(SensorEntity):
-    def __init__(self, hass, data, address, device_name):
+    def __init__(self, hass, data, meta, address, device_name):
         self._hass = hass
         self._data = data
+        self._meta = meta
         self._address = address
         self._device_name = device_name
         self._attr_name = f"Timer Remaining ({device_name})"
@@ -13,6 +14,7 @@ class SoakStationTimerRemainingSensor(SensorEntity):
         self._attr_icon = "mdi:timer-sand"
         self._state = None
         self._data.subscribe(self._update_from_model)
+        self._attr_device_info = self._meta.get_device_info()
 
     def _update_from_model(self):
         new_state = self._data.remaining_seconds

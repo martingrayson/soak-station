@@ -1,12 +1,14 @@
 from homeassistant.const import UnitOfTemperature
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+from homeassistant.helpers.device_registry import DeviceInfo
 
 
 class SoakStationTempSensor(SensorEntity):
-    def __init__(self, hass, data, address, device_name, kind, name):
+    def __init__(self, hass, data, meta, address, device_name, kind, name):
         super().__init__()
         self._hass = hass
         self._data = data
+        self._meta = meta
         self._address = address
         self._kind = kind
         self._device_name = device_name
@@ -16,9 +18,9 @@ class SoakStationTempSensor(SensorEntity):
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_icon = "mdi:thermometer"
         self._state = None
-
-
         self._data.subscribe(self._update_from_model)
+
+        self._attr_device_info = self._meta.get_device_info()
 
     def _update_from_model(self):
         new_state = self._state

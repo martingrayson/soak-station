@@ -5,7 +5,7 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN
 from .mira.helpers.connection import Connection
-from .mira.helpers.data_model import SoakStationData
+from .mira.helpers.data_model import SoakStationData, SoakStationMetadata
 from .mira.helpers.notifications import Notifications
 
 
@@ -19,15 +19,29 @@ async def async_setup_entry(hass, config_entry):
     connection = Connection(hass, device_address, client_id, client_slot)
     await connection.connect()
 
-    data_model = SoakStationData()
-    notifications = Notifications(model=data_model)
+    # Build the metadata wrapper and initialise it
+    metadata = SoakStationMetadata()
+    info = await connection.get_device_info()
+    info['device_address'] = device_address
+    metadata.update_device_identity(**info)
 
+    # Build the data wrapper
+    data_model = SoakStationData()
+
+    # Subscribe
+    notifications = Notifications(model=data_model, metadata=metadata)
     connection.subscribe(notifications)
+
+    # Start requesting info
+    await connection.request_technical_info()
+    await connection.request_nickname()
+
     await connection.request_device_state()
 
     hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {
         "connection": connection,
         "data": data_model,
+        "metadata": metadata,
     }
 
     # Set up periodic polling every 10 seconds

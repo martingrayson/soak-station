@@ -4,9 +4,10 @@ from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySen
 
 
 class SoakStationOutletBinarySensor(BinarySensorEntity):
-    def __init__(self, hass, data, device_name, address, outlet_num):
+    def __init__(self, hass, data, meta, device_name, address, outlet_num):
         self.hass = hass
         self._data = data
+        self._meta = meta
         self._address = address
         self._device_name = device_name
         self._outlet_num = outlet_num
@@ -16,6 +17,7 @@ class SoakStationOutletBinarySensor(BinarySensorEntity):
         self._attr_device_class = BinarySensorDeviceClass.RUNNING
         self._attr_icon = "mdi:shower-head"
         self._attr_is_on = None
+        self._attr_device_info = self._meta.get_device_info()
 
         self._data.subscribe(self._update_from_model)
 

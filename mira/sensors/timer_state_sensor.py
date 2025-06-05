@@ -1,9 +1,10 @@
 from homeassistant.components.sensor import SensorEntity
 
 class SoakStationTimerStateSensor(SensorEntity):
-    def __init__(self, hass, data, address, device_name):
+    def __init__(self, hass, data, meta, address, device_name):
         self._hass = hass
         self._data = data
+        self._meta = meta
         self._address = address
         self._device_name = device_name
         self._attr_name = f"Timer State ({device_name})"
@@ -13,6 +14,7 @@ class SoakStationTimerStateSensor(SensorEntity):
         self._attr_device_class = "enum"
         self._attr_options = ["running", "paused", "stopped"]
         self._data.subscribe(self._update_from_model)
+        self._attr_device_info = self._meta.get_device_info()
 
     def _update_from_model(self):
         new_state = self._data.timer_state
@@ -27,5 +29,5 @@ class SoakStationTimerStateSensor(SensorEntity):
 
     @property
     def native_value(self):
-        return self._state
+        return self._state.name.lower() if self._state else None
 

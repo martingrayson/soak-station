@@ -19,10 +19,11 @@ async def async_setup_entry(
     device_name = data["device_name"]
 
     config_data = hass.data[DOMAIN][config_entry.entry_id]["data"]
+    meta = hass.data[DOMAIN][config_entry.entry_id]["metadata"]
 
     sensors = [
-        SoakStationOutletBinarySensor(hass, config_data, device_name, address, outlet_num=1),
-        SoakStationOutletBinarySensor(hass, config_data, device_name, address, outlet_num=2)
+        SoakStationOutletBinarySensor(hass, config_data, meta, device_name, address, outlet_num=1),
+        SoakStationOutletBinarySensor(hass, config_data, meta, device_name, address, outlet_num=2)
     ]
 
     async_add_entities(sensors)

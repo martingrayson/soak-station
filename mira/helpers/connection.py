@@ -175,11 +175,11 @@ class Connection:
         await self._client.write_gatt_char(UUID_WRITE, bytes(data), response=False)
 
     async def get_device_info(self):
-        device_name = (await self._read(UUID_DEVICE_NAME).decode('UTF-8'))
-        manufacturer = (await self._read(UUID_MANUFACTURER).decode('UTF-8'))
-        model_number = (await self._read(UUID_MODEL_NUMBER).decode('UTF-8'))
+        device_name = (await self._read(UUID_DEVICE_NAME)).decode('UTF-8')
+        manufacturer = (await self._read(UUID_MANUFACTURER)).decode('UTF-8')
+        model_number = (await self._read(UUID_MODEL_NUMBER)).decode('UTF-8')
 
-        return device_name, manufacturer, model_number
+        return {'name': device_name, 'manufacturer': manufacturer, 'model': model_number}
 
     async def request_client_details(self, client_slot):
         payload = bytearray([self._client_slot, 0x6b, 1, 0x10 + client_slot])
@@ -214,6 +214,7 @@ class Connection:
         await self._write(_get_payload_with_crc(payload, self._client_id))
 
     async def request_technical_info(self):
+        logger.warning("requesting technical info")
         payload = bytearray([self._client_slot, 0x32, 1, 1])
         await self._write(_get_payload_with_crc(payload, self._client_id))
 

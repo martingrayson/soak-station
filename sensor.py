@@ -16,11 +16,12 @@ async def async_setup_entry(
     device_name = data["device_name"]
 
     config_data = hass.data[DOMAIN][config_entry.entry_id]["data"]
+    meta = hass.data[DOMAIN][config_entry.entry_id]["metadata"]
 
     sensors = [
-        SoakStationTempSensor(hass, config_data, address, device_name, "target_temp", "Target Temperature"),
-        SoakStationTempSensor(hass, config_data, address, device_name, "actual_temp", "Actual Temperature"),
-        SoakStationTimerStateSensor(hass, config_data, address, device_name),
-        SoakStationTimerRemainingSensor(hass, config_data, address, device_name),
+        SoakStationTempSensor(hass, config_data, meta, address, device_name, "target_temp", "Target Temperature"),
+        SoakStationTempSensor(hass, config_data, meta, address, device_name, "actual_temp", "Actual Temperature"),
+        SoakStationTimerStateSensor(hass, config_data, meta, address, device_name),
+        SoakStationTimerRemainingSensor(hass, config_data, meta, address, device_name),
     ]
     async_add_entities(sensors)
