@@ -83,5 +83,5 @@ MIT License
 
 ## 🛠 Maintainer
 
-Built by @martingrayson.  
+Built by [@martingrayson](https://github.com/martingrayson)
 Issues and PRs welcome!
