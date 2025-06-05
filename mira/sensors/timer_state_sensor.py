@@ -10,10 +10,9 @@ class SoakStationTimerStateSensor(SensorEntity):
         self._attr_unique_id = f"soakstation_timerstate_{address.replace(':', '')}"
         self._attr_icon = "mdi:timer-outline"
         self._state = None
+        self._attr_device_class = "enum"
+        self._attr_options = ["running", "paused", "stopped"]
         self._data.subscribe(self._update_from_model)
-
-        #TODO
-        # self._attr_options = ["running", "paused", "stopped"]
 
     def _update_from_model(self):
         new_state = self._data.timer_state

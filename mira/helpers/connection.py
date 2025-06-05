@@ -2,9 +2,8 @@ import asyncio
 import logging
 import struct
 from typing import Optional
-
 import bleak
-from bleak import BLEDevice
+
 from homeassistant.components.bluetooth import (
     async_ble_device_from_address
 )
@@ -21,7 +20,7 @@ class Connection:
     def __init__(self, hass, address, client_id=None, client_slot=None):
         self._hass = hass
         self._address = address
-        self._peripheral: Optional[BLEDevice] = None
+        self._peripheral: Optional[bleak.BLEDevice] = None
         self._client_id = client_id
         self._client_slot = client_slot
         self._client = None
@@ -92,8 +91,6 @@ class Connection:
         self._notifications = notifications
 
         async def handle(sender, data):
-            logger.warn(f"Received data from {sender}: {data}")
-
             if len(self.partial_payload) > 0:
                 self.partial_payload.extend(data)
                 payload = self.partial_payload

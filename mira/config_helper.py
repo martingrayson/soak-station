@@ -1,5 +1,6 @@
 import logging
 import random
+
 from .helpers.connection import Connection
 from .helpers.notifications import Notifications
 

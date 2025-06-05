@@ -1,11 +1,12 @@
 import logging
 import voluptuous as vol
-from .const import DOMAIN
 
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
 from homeassistant.components.bluetooth import async_get_scanner
+
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 

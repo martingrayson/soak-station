@@ -1,6 +1,6 @@
 from typing import Callable
-
 import logging
+
 _LOGGER = logging.getLogger(__name__)
 
 class SoakStationData:

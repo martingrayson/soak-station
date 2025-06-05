@@ -3,7 +3,7 @@ import logging
 import struct
 from typing import Callable, Dict
 
-from .const import SUCCESS, FAILURE, OUTLET_RUNNING
+from .const import SUCCESS, FAILURE, OUTLET_RUNNING, TIMER_STOPPED, TIMER_PAUSED, TIMER_RUNNING
 from .generic import _bits_to_list, _convert_temperature_reverse
 from .data_model import SoakStationData
 
@@ -42,12 +42,13 @@ class Notifications:
         self._wait_event.clear()
 
     def handle_packet(self, client_slot, payload_length, payload):
-        logger.warning(f"Handle packet {client_slot}, {payload_length}, {payload}")
+        # logger.warning(f"Handle packet {client_slot}, {payload_length}, {payload}")
         handler = self._handlers.get(payload_length)
         if handler:
             # logger.warning(f"calling handler {handler}")
             handler(client_slot, payload)
-        # logger.warning("finished handling packet")
+        else:
+            logger.warning("No handler for payload length %d", payload_length)
         self._set()
 
     # === Individual Handlers ===
@@ -83,13 +84,21 @@ class Notifications:
             logger.warning(f"Unexpected payload length for device state: {len(payload)} - {payload}")
             return
 
-        timer_state = payload[0]
+        #TODO: Move this logic.
+        if payload[1] == TIMER_STOPPED:
+            timer_state = "stopped"
+        elif payload[1] == TIMER_PAUSED:
+            timer_state = "paused"
+        elif payload[1] == TIMER_RUNNING:
+            timer_state = "running"
+
         target_temperature = _convert_temperature_reverse(payload[1:3])
         actual_temperature = _convert_temperature_reverse(payload[3:5])
         remaining_seconds = struct.unpack(">H", payload[7:9])[0]
         outlet_state_1 = payload[5] == OUTLET_RUNNING
         outlet_state_2 = payload[6] == OUTLET_RUNNING
-        # logger.warning(f"Outlet state: {payload[5]}, {payload[6]}")
+
+        logger.warning(f"Timer state: {timer_state}, target temperature: {target_temperature}, actual temperature: {actual_temperature}, remaining seconds: {remaining_seconds}, outlet state 1: {outlet_state_1}, outlet state 2: {outlet_state_2}")
 
         self._model.update_state(outlet_1_on=outlet_state_1, outlet_2_on=outlet_state_2,
                                  target_temp=target_temperature, actual_temp=actual_temperature,
@@ -98,7 +107,13 @@ class Notifications:
     def _handle_controls_operated_or_outlet_settings(self, slot, payload):
         if payload[0] in [1, 0x80]:  # controls operated
             # change_made = payload[0] == 1
-            timer_state = payload[1]
+            if payload[1] == TIMER_STOPPED:
+                timer_state = "stopped"
+            elif payload[1] == TIMER_PAUSED:
+                timer_state = "paused"
+            elif payload[1] == TIMER_RUNNING:
+                timer_state = "running"
+
             target_temperature = _convert_temperature_reverse(payload[2:4])
             actual_temperature = _convert_temperature_reverse(payload[4:6])
             outlet_state_1 = payload[6] == OUTLET_RUNNING

@@ -1,11 +1,13 @@
 import logging
 from datetime import timedelta
 
+from homeassistant.helpers.event import async_track_time_interval
+
 from .const import DOMAIN
 from .mira.helpers.connection import Connection
 from .mira.helpers.data_model import SoakStationData
 from .mira.helpers.notifications import Notifications
-from homeassistant.helpers.event import async_track_time_interval
+
 
 logger = logging.getLogger(__name__)
 
