@@ -58,6 +58,7 @@ class Connection:
 
 
     async def disconnect(self):
+        logger.warning("Disconnecting")
         self._peripheral = None
         if self._client and self._client.is_connected:
             await self._client.disconnect()
@@ -91,7 +92,7 @@ class Connection:
         self._notifications = notifications
 
         async def handle(sender, data):
-            logger.debug(f"Received data from {sender}: {data}")
+            logger.warn(f"Received data from {sender}: {data}")
 
             if len(self.partial_payload) > 0:
                 self.partial_payload.extend(data)
@@ -126,6 +127,7 @@ class Connection:
             self._notifications.handle_packet(client_slot, payload_length, payload)
 
         # Start notification listener
+        logger.warning("Subscribing to BLE notifications for UUID_READ")
         asyncio.create_task(self._client.start_notify(UUID_READ, handle))
 
     async def pair_client(self, new_client_id, client_name, notifications: Notifications):
@@ -160,6 +162,7 @@ class Connection:
             logger.warning(f"{new_client_id}, {notifications.client_slot}")
             return new_client_id, notifications.client_slot
         finally:
+            logger.warning(f"Stopping notify!!")
             await self._client.stop_notify(UUID_READ)
 
 

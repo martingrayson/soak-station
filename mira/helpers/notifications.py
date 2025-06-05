@@ -45,9 +45,9 @@ class Notifications:
         logger.warning(f"Handle packet {client_slot}, {payload_length}, {payload}")
         handler = self._handlers.get(payload_length)
         if handler:
-            logger.warning(f"calling handler {handler}")
+            # logger.warning(f"calling handler {handler}")
             handler(client_slot, payload)
-        logger.warning("finished handling packet")
+        # logger.warning("finished handling packet")
         self._set()
 
     # === Individual Handlers ===
@@ -89,7 +89,7 @@ class Notifications:
         remaining_seconds = struct.unpack(">H", payload[7:9])[0]
         outlet_state_1 = payload[5] == OUTLET_RUNNING
         outlet_state_2 = payload[6] == OUTLET_RUNNING
-        logger.warning(f"Outlet state: {payload[5]}, {payload[6]}")
+        # logger.warning(f"Outlet state: {payload[5]}, {payload[6]}")
 
         self._model.update_state(outlet_1_on=outlet_state_1, outlet_2_on=outlet_state_2,
                                  target_temp=target_temperature, actual_temp=actual_temperature,
