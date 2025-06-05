@@ -5,9 +5,10 @@
 
 It provides real-time access to device state, temperature readings, and timer data, all accessible as native Home Assistant entities.
 
+
 > ⚠️ This project is heavily inspired by and based on [alexpilotti/python-miramode](https://github.com/alexpilotti/python-miramode). Many thanks to [@alexpilotti](https://github.com/alexpilotti) for reverse-engineering the Mira protocol.
 
----
+
 
 ## 🔧 Features
 
@@ -17,7 +18,7 @@ It provides real-time access to device state, temperature readings, and timer da
 - 📶 Uses Bluetooth Low Energy (BLE) to communicate locally.
 - 🔐 Built-in pairing mechanism with Mira's client-slot system.
 
----
+
 
 ## 📦 Installation
 
@@ -35,7 +36,7 @@ It provides real-time access to device state, temperature readings, and timer da
 
 5. Follow the pairing wizard. Ensure your Mira device is in **pairing mode**.
 
----
+
 
 ## 🧪 Exposed Entities
 
@@ -44,7 +45,7 @@ It provides real-time access to device state, temperature readings, and timer da
 | `binary_sensor`    | Outlet 1 & 2 state (running or off)            |
 | `sensor`           | Target temp, actual temp, timer state & time   |
 
----
+
 
 ## 💡 Usage Example
 
@@ -54,7 +55,7 @@ Once installed, you can:
 - Show water temperature in a dashboard
 - Pause the bath timer if the room gets too cold (via automation)
 
----
+
 
 ## 🧰 Troubleshooting
 
@@ -62,7 +63,7 @@ Once installed, you can:
 - BLE range matters — ensure your Home Assistant host is nearby.
 - Some USB BLE adapters may require additional permissions or setup on Linux.
 
----
+
 
 ## 🤝 Acknowledgements
 
@@ -72,13 +73,13 @@ This integration builds upon:
 - [Home Assistant Bluetooth integration framework](https://www.home-assistant.io/integrations/bluetooth/)
 - [Bleak](https://github.com/hbldh/bleak) for low-level BLE communication
 
----
+
 
 ## 📜 License
 
 MIT License
 
----
+
 
 ## 🛠 Maintainer
 
