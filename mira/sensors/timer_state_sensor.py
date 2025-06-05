@@ -12,6 +12,9 @@ class SoakStationTimerStateSensor(SensorEntity):
         self._state = None
         self._data.subscribe(self._update_from_model)
 
+        #TODO
+        # self._attr_options = ["running", "paused", "stopped"]
+
     def _update_from_model(self):
         new_state = self._data.timer_state
         # Only update HA state if it changed

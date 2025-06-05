@@ -26,10 +26,10 @@ class Notifications:
             2: self._handle_slots,
             4: self._handle_device_settings,
             10: self._handle_device_state,
-            # 11: self._handle_controls_operated_or_outlet_settings,
-            # 16: self._handle_technical_info_or_nickname,
-            # 20: self._handle_client_details,
-            # 24: self._handle_preset_details,
+            11: self._handle_controls_operated_or_outlet_settings,
+            16: self._handle_technical_info_or_nickname,
+            20: self._handle_client_details,
+            24: self._handle_preset_details,
         }
 
     async def wait(self):
@@ -95,22 +95,53 @@ class Notifications:
                                  target_temp=target_temperature, actual_temp=actual_temperature,
                                  remaining_seconds=remaining_seconds, timer_state=timer_state)
 
-    # def _handle_controls_operated_or_outlet_settings(self, slot, payload):
-    #     if payload[0] in [1, 0x80]:  # controls operated
-    #         ...
-    #     elif payload[0] in [0, 0x4, 0x8]:  # outlet settings
-    #         ...
-    #
-    # def _handle_technical_info_or_nickname(self, slot, payload):
-    #     if payload[0] == 0:
-    #         ...
-    #     else:
-    #         nickname = payload.decode("UTF-8")
-    #         print(f"Nickname: {nickname}")
-    #
-    # def _handle_client_details(self, slot, payload):
-    #     name = payload.decode("UTF-8")
-    #     print(f"Client name: {name}")
-    #
-    # def _handle_preset_details(self, slot, payload):
-    #     ...
+    def _handle_controls_operated_or_outlet_settings(self, slot, payload):
+        if payload[0] in [1, 0x80]:  # controls operated
+            # change_made = payload[0] == 1
+            timer_state = payload[1]
+            target_temperature = _convert_temperature_reverse(payload[2:4])
+            actual_temperature = _convert_temperature_reverse(payload[4:6])
+            outlet_state_1 = payload[6] == OUTLET_RUNNING
+            outlet_state_2 = payload[7] == OUTLET_RUNNING
+            remaining_seconds = struct.unpack(">H", payload[8:10])[0]
+
+            self._model.update_state(outlet_1_on=outlet_state_1, outlet_2_on=outlet_state_2,
+                                     target_temp=target_temperature, actual_temp=actual_temperature,
+                                     remaining_seconds=remaining_seconds, timer_state=timer_state)
+
+        elif payload[0] in [0, 0x4, 0x8]:  # outlet settings
+            outlet_flag = payload[0]
+            min_duration_seconds = payload[4]
+            max_temperature = _convert_temperature_reverse(payload[5:7])
+            min_temperature = _convert_temperature_reverse(payload[7:9])
+
+            #TODO: Update the model here later
+
+
+
+    def _handle_technical_info_or_nickname(self, slot, payload):
+        if payload[0] == 0:
+            valve_type = payload[1]
+            valve_sw_version = payload[3]
+            ui_type = payload[5]
+            ui_sw_version = payload[7]
+            bt_sw_version = payload[15]
+
+            # TODO: Update the model here later
+
+        else:
+            nickname = payload.decode("UTF-8")
+            # TODO: Update the model here later
+
+    def _handle_client_details(self, slot, payload):
+        name = payload.decode("UTF-8")
+        # TODO: Update the model here later
+
+    def _handle_preset_details(self, slot, payload):
+        preset_slot = payload[0]
+        target_temperature = _convert_temperature_reverse(payload[1:3])
+        duration_seconds = payload[4]
+        outlet_enabled = _bits_to_list(payload[5], 8)
+        preset_name = payload[8:].decode('UTF-8')
+
+        # TODO: Update the model here later
