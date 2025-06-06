@@ -8,9 +8,7 @@ import asyncio
 import logging
 import struct
 from typing import Optional, Tuple, Dict, Any, Union
-import bleak
-from bleak.backends.device import BLEDevice
-from bleak.backends.client import BleakClient
+from bleak import BLEDevice, BleakClient
 
 from homeassistant.components.bluetooth import (
     async_ble_device_from_address
@@ -97,7 +95,7 @@ class Connection:
         for attempt in range(retries):
             try:
                 self._peripheral = await self._get_ble_device()
-                self._client = bleak.BleakClient(self._peripheral)
+                self._client = BleakClient(self._peripheral)
                 await self._client.connect()
                 return
             except Exception as e:
