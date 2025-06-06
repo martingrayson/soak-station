@@ -37,7 +37,6 @@ async def async_setup_entry(hass, config_entry):
     # Start requesting info
     await connection.request_technical_info()
     await metadata.wait_for_technical_info()
-    await connection.request_nickname()
 
     await connection.request_device_state()
 

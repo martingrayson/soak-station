@@ -94,6 +94,7 @@ class SoakStationMetadata:
         self.manufacturer: Optional[str] = None
         self.model: Optional[str] = None
         self.device_address: Optional[str] = None
+        self.serial_number: Optional[str] = ""
 
         # Presets
         self.presets: Dict[int, Preset] = {}
@@ -115,7 +116,7 @@ class SoakStationMetadata:
         return DeviceInfo(
             sw_version=f"valve:{self.valve_sw_version} bt:{self.bt_sw_version} ui:{self.ui_sw_version}",
             suggested_area="Bathroom",
-            serial_number="",
+            serial_number=self.serial_number,
             name=self.name,
             model=self.model,
             manufacturer=self.manufacturer,
