@@ -30,9 +30,9 @@ class Connection:
         self._response_data = None
 
         # For packet reassembly
-        self.partial_payload = bytearray()
-        self.client_slot = None
-        self.expected_payload_length = None
+        self._partial_payload = bytearray()
+        self._reassembly_client_slot = None 
+        self._reassembly_payload_length = None
 
     def set_client_data(self, client_id, client_slot):
         self._client_id = client_id
@@ -41,12 +41,7 @@ class Connection:
     async def connect(self, retries=10, delay=1.0):
         for attempt in range(retries):
             try:
-                self._peripheral = async_ble_device_from_address(
-                    self._hass, self._address, connectable=True
-                )
-                if not self._peripheral:
-                    raise Exception("Device not found")
-
+                self._peripheral = await self._get_ble_device()
                 self._client = bleak.BleakClient(self._peripheral)
                 await self._client.connect()
                 return
@@ -54,6 +49,14 @@ class Connection:
                 if attempt == retries - 1:
                     raise
                 await asyncio.sleep(delay)
+
+    async def _get_ble_device(self):
+        device = async_ble_device_from_address(
+            self._hass, self._address, connectable=True
+        )
+        if not device:
+            raise ConnectionError("Device not found")
+        return device
 
     async def reconnect(self):
         await self.disconnect()
@@ -73,83 +76,111 @@ class Connection:
     async def __aexit__(self, type, value, traceback):
         await self.disconnect()
 
-    def _handle_notification(self, data: bytearray, notifications: Notifications):
-        logger.warning(f"Notification received: {_format_bytearray(data)}")
-
+    def _validate_packet(self, data: bytearray) -> tuple[int, int, bytearray]:
         if len(data) < 3:
-            logger.warning(f"Invalid packet length: {len(data)}")
-            return
+            raise ValueError(f"Invalid packet length: {len(data)}")
 
         client_slot = data[0] - 0x40
         payload_length = data[2]
         payload = data[3:]
 
         if len(payload) != payload_length:
-            logger.warning(f"Expected {payload_length} bytes, got {len(payload)}")
-            return
+            raise ValueError(f"Expected {payload_length} bytes, got {len(payload)}")
 
-        notifications.handle_packet(client_slot, payload_length, payload)
+        return client_slot, payload_length, payload
+
+    def _handle_notification(self, data: bytearray, notifications: Notifications):
+        logger.warning(f"Notification received: {_format_bytearray(data)}")
+        try:
+            client_slot, payload_length, payload = self._validate_packet(data)
+            notifications.handle_packet(client_slot, payload_length, payload)
+        except ValueError as e:
+            logger.warning(str(e))
 
     def subscribe(self, notifications):
         """Subscribe to notifications and route to the given Notifications handler."""
         self._notifications = notifications
 
         async def handle(sender, data):
-            if len(self.partial_payload) > 0:
-                self.partial_payload.extend(data)
-                payload = self.partial_payload
-                client_slot = self.client_slot
-                payload_length = self.expected_payload_length
-
-                self.partial_payload = bytearray()
-                self.client_slot = None
-                self.expected_payload_length = None
+            if len(self._partial_payload) > 0:
+                self._handle_partial_packet(data, notifications)
             else:
-                if len(data) < 3:
-                    logger.warning(f"Ignoring too-short packet: {data}")
-                    return
-
-                client_slot = data[0] - 0x40
-                payload_length = data[2]
-                payload = data[3:]
-
-            if len(payload) < payload_length:
-                self.client_slot = client_slot
-                self.expected_payload_length = payload_length
-                self.partial_payload.extend(payload)
-                return
-
-            if len(payload) != payload_length:
-                logger.warning(
-                    f"Payload length mismatch: expected {payload_length}, got {len(payload)}"
-                )
-                return
-
-            self._notifications.handle_packet(client_slot, payload_length, payload)
+                self._handle_new_packet(data, notifications)
 
         # Start notification listener
         logger.warning("Subscribing to BLE notifications for UUID_READ")
         asyncio.create_task(self._client.start_notify(UUID_READ, handle))
 
+    def _handle_partial_packet(self, data: bytearray, notifications: Notifications):
+        self._partial_payload.extend(data)
+        payload = self._partial_payload
+        client_slot = self._reassembly_client_slot
+        payload_length = self._reassembly_payload_length
+
+        self._reset_packet_reassembly()
+
+        if len(payload) >= payload_length:
+            if len(payload) == payload_length:
+                notifications.handle_packet(client_slot, payload_length, payload)
+            else:
+                logger.warning(
+                    f"Payload length mismatch: expected {payload_length}, got {len(payload)}"
+                )
+
+    def _handle_new_packet(self, data: bytearray, notifications: Notifications):
+        if len(data) < 3:
+            logger.warning(f"Ignoring too-short packet: {data}")
+            return
+
+        client_slot = data[0] - 0x40
+        payload_length = data[2]
+        payload = data[3:]
+
+        if len(payload) < payload_length:
+            self._start_packet_reassembly(client_slot, payload_length, payload)
+        elif len(payload) == payload_length:
+            notifications.handle_packet(client_slot, payload_length, payload)
+        else:
+            logger.warning(
+                f"Payload length mismatch: expected {payload_length}, got {len(payload)}"
+            )
+
+    def _reset_packet_reassembly(self):
+        self._partial_payload = bytearray()
+        self._reassembly_client_slot = None
+        self._reassembly_payload_length = None
+
+    def _start_packet_reassembly(self, client_slot, payload_length, initial_payload):
+        self._reassembly_client_slot = client_slot
+        self._reassembly_payload_length = payload_length
+        self._partial_payload.extend(initial_payload)
+
     async def pair_client(self, new_client_id, client_name, notifications: Notifications):
         logger.warning(f"Pairing client {new_client_id} with {client_name}")
+        
+        payload = self._build_pairing_payload(new_client_id, client_name)
+        full_payload = _get_payload_with_crc(payload, MAGIC_ID)
+
+        return await self._execute_pairing(full_payload, new_client_id, notifications)
+
+    def _build_pairing_payload(self, new_client_id: int, client_name: str) -> bytearray:
         new_client_id_bytes = struct.pack(">I", new_client_id)
         client_name_bytes = client_name.encode("UTF-8")
 
         if len(client_name_bytes) > 20:
-            raise Exception("The client name is too long")
+            raise ValueError("The client name is too long")
 
         client_name_bytes += bytearray([0] * (20 - len(client_name_bytes)))
-        payload = bytearray([0, 0xEB, 24]) + new_client_id_bytes + client_name_bytes
-        full_payload = _get_payload_with_crc(payload, MAGIC_ID)
+        return bytearray([0, 0xEB, 24]) + new_client_id_bytes + client_name_bytes
 
-        # Clear previous response
+    async def _execute_pairing(self, full_payload: bytearray, new_client_id: int, 
+                             notifications: Notifications) -> tuple[int, int]:
         self._response_event.clear()
         self._response_data = None
 
-        # Subscribe to notifications before writing
         logger.warning(f"Pairing ... awaiting notify")
-        await self._client.start_notify(UUID_READ, lambda _, data: self._handle_notification(data, notifications))
+        await self._client.start_notify(UUID_READ, 
+            lambda _, data: self._handle_notification(data, notifications))
 
         try:
             notifications.reset()
@@ -165,7 +196,6 @@ class Connection:
         finally:
             logger.warning(f"Stopping notify!!")
             await self._client.stop_notify(UUID_READ)
-
 
     async def _read(self, characteristic):
         return await self._client.read_gatt_char(characteristic)
