@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import Callable
 from enum import Enum
 from dataclasses import dataclass, field
@@ -71,61 +72,61 @@ class SoakStationData:
         self.subscribers.append(callback)
 
 
-@dataclass
 class Preset:
-    slot: int
-    target_temp: float
-    duration_seconds: int
-    outlet_enabled: list[bool]
-    name: str
+    def __init__(self, slot: int, target_temp: float, duration_seconds: int, outlet_enabled: list[bool], name: str):
+        self.slot = slot
+        self.target_temp = target_temp
+        self.duration_seconds = duration_seconds
+        self.outlet_enabled = outlet_enabled
+        self.name = name
 
-
-@dataclass
 class SoakStationMetadata:
-    valve_type: Optional[int] = None
-    valve_sw_version: Optional[int] = None
-    ui_type: Optional[int] = None
-    ui_sw_version: Optional[int] = None
-    bt_sw_version: Optional[int] = None
+    def __init__(self):
+        self.valve_sw_version: Optional[str] = None
+        self.ui_sw_version: Optional[str] = None
+        self.bt_sw_version: Optional[str] = None
 
-    nickname: Optional[str] = None
-    client_name: Optional[str] = None
+        self.nickname: Optional[str] = None
+        self.client_name: Optional[str] = None
 
-    # Device Info
-    name: Optional[str] = None
-    manufacturer: Optional[str] = None
-    model: Optional[str] = None
-    device_address: Optional[str] = None
+        # Device Info
+        self.name: Optional[str] = None
+        self.manufacturer: Optional[str] = None
+        self.model: Optional[str] = None
+        self.device_address: Optional[str] = None
 
-    # Presets
-    presets: Dict[int, Preset] = field(default_factory=dict)
+        # Presets
+        self.presets: Dict[int, Preset] = {}
 
-    # Outlet settings
-    outlet_flag: Optional[int] = None
-    min_duration_seconds: Optional[int] = None
-    max_temperature: Optional[float] = None
-    min_temperature: Optional[float] = None
+        # Outlet settings
+        self.outlet_flag: Optional[int] = None
+        self.min_duration_seconds: Optional[int] = None
+        self.max_temperature: Optional[float] = None
+        self.min_temperature: Optional[float] = None
 
-    # Device settings
-    outlet_enabled: Optional[list[bool]] = None
-    default_preset_slot: Optional[int] = None
-    controller_settings: Optional[list[bool]] = None
+        # Device settings
+        self.outlet_enabled: Optional[list[bool]] = None
+        self.default_preset_slot: Optional[int] = None
+        self.controller_settings: Optional[list[bool]] = None
 
+        self._technical_info_event = asyncio.Event()
 
     def get_device_info(self) -> DeviceInfo:
-        return DeviceInfo(sw_version=f"valve: {self.valve_sw_version} / bluetooth: {self.bt_sw_version} / ui: {self.ui_sw_version}",
-                          suggested_area="Bathroom", serial_number="", name=self.name, model=self.model,
-                          manufacturer=self.manufacturer, identifiers={(DOMAIN, self.device_address)})
+        return DeviceInfo(
+            sw_version=f"valve:{self.valve_sw_version} bt:{self.bt_sw_version} ui:{self.ui_sw_version}",
+            suggested_area="Bathroom",
+            serial_number="",
+            name=self.name,
+            model=self.model,
+            manufacturer=self.manufacturer,
+            identifiers={(DOMAIN, self.device_address)},
+        )
 
-    # TODO: this isnt working, its missing from the device info
-    def update_from_technical_info(self, valve_type, valve_sw_version, ui_type, ui_sw_version, bt_sw_version):
-        self.valve_type = valve_type
+    def update_from_technical_info(self, valve_sw_version, ui_sw_version, bt_sw_version):
         self.valve_sw_version = valve_sw_version
-        self.ui_type = ui_type
         self.ui_sw_version = ui_sw_version
         self.bt_sw_version = bt_sw_version
-
-        _LOGGER.warning(f"got technical info from data model...{self.valve_sw_version} - {self.bt_sw_version} - {self.ui_sw_version}")
+        self._technical_info_event.set()  # signal completion
 
     def update_nickname(self, name: str):
         self.nickname = name
@@ -148,24 +149,16 @@ class SoakStationMetadata:
             name=name
         )
 
-    def update_outlet_settings(
-            self,
-            outlet_flag: int,
-            min_duration_seconds: int,
-            max_temperature: float,
-            min_temperature: float
-    ):
+    def update_outlet_settings(self, outlet_flag: int, min_duration_seconds: int, max_temperature: float, min_temperature: float):
         self.outlet_flag = outlet_flag
         self.min_duration_seconds = min_duration_seconds
         self.max_temperature = max_temperature
         self.min_temperature = min_temperature
 
-    def update_device_settings(
-            self,
-            outlet_enabled: list[bool],
-            default_preset_slot: int,
-            controller_settings: list[bool]
-    ):
+    def update_device_settings(self, outlet_enabled: list[bool], default_preset_slot: int, controller_settings: list[bool]):
         self.outlet_enabled = outlet_enabled
         self.default_preset_slot = default_preset_slot
         self.controller_settings = controller_settings
+
+    async def wait_for_technical_info(self):
+        await self._technical_info_event.wait()

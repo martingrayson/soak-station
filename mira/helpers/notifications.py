@@ -227,14 +227,15 @@ class Notifications:
             return
 
         if payload[0] == 0:
-            valve_type: int = payload[1]
-            valve_sw_version: int = payload[3]
-            ui_type: int = payload[5]
-            ui_sw_version: int = payload[7]
-            bt_sw_version: int = payload[15]
+            values = struct.unpack(">8H", payload)
+            logging.warning(f"values: {values}")
+            valve_sw_version: str = f"{values[0]}.{values[1]}"
+            bt_sw_version: str = f"{values[2]}.{values[3]}"
+            ui_sw_version: str = f"{values[6]}.{values[7]}"
 
-            self._metadata.update_from_technical_info(valve_type, valve_sw_version, ui_type, ui_sw_version,
-                                                      bt_sw_version)
+            logger.warning(f"valve_sw_version: {valve_sw_version} - bt_sw_version: {bt_sw_version} - ui_sw_version: {ui_sw_version}")
+
+            self._metadata.update_from_technical_info(valve_sw_version, bt_sw_version, ui_sw_version)
         else:
             self._metadata.update_nickname(payload.decode("UTF-8"))
 
