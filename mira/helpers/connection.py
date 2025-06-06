@@ -55,6 +55,10 @@ class Connection:
                     raise
                 await asyncio.sleep(delay)
 
+    async def reconnect(self):
+        await self.disconnect()
+        await asyncio.sleep(1)  # small delay to allow clean BLE state
+        await self.connect()
 
     async def disconnect(self):
         logger.warning("Disconnecting")

@@ -1,6 +1,7 @@
 import logging
 from datetime import timedelta
 
+from bleak import BleakCharacteristicNotFoundError
 from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DOMAIN
@@ -48,18 +49,26 @@ async def async_setup_entry(hass, config_entry):
     async def poll_device_state(now):
         try:
             await connection.request_device_state()
+        except BleakCharacteristicNotFoundError as e:
+            logger.warning("Characteristic not found, attempting reconnect")
+            try:
+                await connection.reconnect()
+                await connection.request_device_state()
+            except Exception as e:
+                logger.error(f"Retry failed: {e}")
         except Exception as e:
             logger.warning(f"Failed to poll device state: {e}")
 
     async_track_time_interval(hass, poll_device_state, timedelta(seconds=20))
 
 
-    await hass.config_entries.async_forward_entry_setups(config_entry, ["binary_sensor", "sensor"])
+    await hass.config_entries.async_forward_entry_setups(config_entry, ["binary_sensor", "sensor", "switch"])
     return True
 
 async def async_unload_entry(hass, config_entry):
     unload_bin = await hass.config_entries.async_forward_entry_unload(config_entry, "binary_sensor")
     unload_sens = await hass.config_entries.async_forward_entry_unload(config_entry, "sensor")
+    unload_sq = await hass.config_entries.async_forward_entry_unload(config_entry, "switch")
 
     connection = hass.data[DOMAIN][config_entry.entry_id]["connection"]
     await connection.disconnect()
