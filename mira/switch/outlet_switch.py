@@ -55,16 +55,23 @@ class SoakStationOutletSwitch(SwitchEntity):
             self._state = new_state
             self.async_write_ha_state()
 
+    async def _update_outlet_state(self, new_state: bool):
+        """Update the state of the controlled outlet while maintaining other outlet's state.
+        
+        Args:
+            new_state: True to turn on, False to turn off
+        """
+        outlets = [self._model.outlet_1_on, self._model.outlet_2_on]
+        outlets[self._outlet_number - 1] = new_state
+        await self._connection.control_outlets(outlets[0], outlets[1], temperature=self._model.target_temp or 38)
+
     async def async_turn_on(self, **kwargs):
         """Turn the outlet on.
         
         Sets the appropriate outlet to on state while maintaining the other outlet's
         current state. Uses a default temperature of 38°C.
         """
-        outlet_1 = self._outlet_number == 1
-        outlet_2 = self._outlet_number == 2
-        
-        await self._connection.control_outlets(outlet_1, outlet_2, temperature=38)
+        await self._update_outlet_state(True)
 
     async def async_turn_off(self, **kwargs):
         """Turn the outlet off.
@@ -72,17 +79,7 @@ class SoakStationOutletSwitch(SwitchEntity):
         Sets the appropriate outlet to off state while maintaining the other outlet's
         current state. Uses a default temperature of 38°C.
         """
-        # Initialize both outlets as None to maintain current state
-        outlet_1 = None
-        outlet_2 = None
-        
-        # Set only the target outlet to off
-        if self._outlet_number == 1:
-            outlet_1 = False
-        elif self._outlet_number == 2:
-            outlet_2 = False
-            
-        await self._connection.control_outlets(outlet_1, outlet_2, temperature=38)
+        await self._update_outlet_state(False)
 
     @property
     def is_on(self):

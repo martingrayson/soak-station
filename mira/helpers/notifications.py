@@ -129,6 +129,7 @@ class Notifications:
         slots: List[int] = _bits_to_list(struct.unpack(">H", payload)[0], 16)
         if self._model:
             self._model.slots = slots
+            logger.warning(f"handle slots: {slots}")
 
     def _handle_device_settings(self, slot: int, payload: bytearray) -> None:
         """Handle device settings packet.
@@ -248,4 +249,6 @@ class Notifications:
             duration: int = payload[4]
             outlet_flags: List[int] = _bits_to_list(payload[5], 8)
             name: str = payload[8:].decode('UTF-8')
+
+            logger.warning(f"handle preset details: {slot} - {target_temp} - {duration} - {outlet_flags} - {name}")
             self._metadata.update_preset(slot, target_temp, duration, outlet_flags, name)

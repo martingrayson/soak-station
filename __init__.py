@@ -26,6 +26,7 @@ async def async_setup_entry(hass, config_entry):
     info['device_address'] = device_address
     metadata.update_device_identity(**info)
 
+
     # Build the data wrapper
     data_model = SoakStationData()
 

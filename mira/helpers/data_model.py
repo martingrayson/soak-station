@@ -128,7 +128,6 @@ class SoakStationMetadata:
         _LOGGER.warning(f"got technical info from data model...{self.valve_sw_version} - {self.bt_sw_version} - {self.ui_sw_version}")
 
     def update_nickname(self, name: str):
-        _LOGGER.warning(f"hickname {name}")
         self.nickname = name
 
     def update_client_name(self, name: str):
