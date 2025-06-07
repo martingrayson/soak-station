@@ -41,7 +41,16 @@ async def config_flow_pairing(
         ConnectionError: If device connection fails
         ValueError: If pairing process fails
     """
+    logger.debug(f"Starting pairing process for device at {address}")
+    
+    if client_id is None:
+        client_id = generate_client_id()
+        logger.debug(f"Generated new client ID: {client_id}")
+    else:
+        logger.debug(f"Using provided client ID: {client_id}")
+
     async with Connection(hass, address) as conn:
+        logger.debug(f"Connection established, initiating pairing with name: {client_name}")
         notifications = Notifications(is_pairing=True)
         client_id_out, client_slot = await conn.pair_client(
             client_id or generate_client_id(),
@@ -50,7 +59,7 @@ async def config_flow_pairing(
         )
         
     logger.debug(
-        "Paired new client id: %s, client_slot: %s",
+        "Pairing completed successfully - client_id: %s, client_slot: %s",
         client_id_out,
         client_slot
     )
@@ -67,4 +76,6 @@ def generate_client_id() -> int:
         int: A random integer ID between 10000 and 65535
     """
     max_client_id = (1 << 16) - 1  # 65535
-    return random.randint(10000, max_client_id)
+    client_id = random.randint(10000, max_client_id)
+    logger.debug(f"Generated client ID: {client_id} (range: 10000-{max_client_id})")
+    return client_id

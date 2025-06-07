@@ -94,13 +94,17 @@ class Connection:
         """
         for attempt in range(retries):
             try:
+                logger.debug(f"Attempting to connect to device at {self._address} (attempt {attempt + 1}/{retries})")
                 self._peripheral = await self._get_ble_device()
                 self._client = BleakClient(self._peripheral)
                 await self._client.connect()
+                logger.debug(f"Successfully connected to device at {self._address}")
                 return
             except Exception as e:
                 if attempt == retries - 1:
+                    logger.debug(f"Failed to connect after {retries} attempts: {e}")
                     raise
+                logger.debug(f"Connection attempt {attempt + 1} failed: {e}")
                 await asyncio.sleep(delay)
 
     async def _get_ble_device(self) -> BLEDevice:
@@ -112,24 +116,31 @@ class Connection:
         Raises:
             ConnectionError: If device not found
         """
+        logger.debug(f"Discovering device at address {self._address}")
         device = async_ble_device_from_address(
             self._hass, self._address, connectable=True
         )
         if not device:
+            logger.debug(f"Device not found at address {self._address}")
             raise ConnectionError("Device not found")
+        logger.debug(f"Found device: {device.name} ({device.address})")
         return device
 
     async def reconnect(self) -> None:
         """Disconnect and reconnect to device."""
+        logger.debug("Initiating reconnection")
         await self.disconnect()
         await asyncio.sleep(1)  # small delay to allow clean BLE state
         await self.connect()
+        logger.debug("Reconnection completed")
 
     async def disconnect(self) -> None:
         """Disconnect from device."""
+        logger.debug("Disconnecting from device")
         self._peripheral = None
         if self._client and self._client.is_connected:
             await self._client.disconnect()
+            logger.debug("Device disconnected")
 
     async def __aenter__(self) -> "Connection":
         """Connect when entering context."""
@@ -162,6 +173,7 @@ class Connection:
         if len(payload) != payload_length:
             raise ValueError(f"Expected {payload_length} bytes, got {len(payload)}")
 
+        logger.debug(f"Validated packet - client_slot: {client_slot}, length: {payload_length}")
         return client_slot, payload_length, payload
 
     def _handle_notification(self, data: bytearray, notifications: Notifications) -> None:
@@ -172,10 +184,11 @@ class Connection:
             notifications: Handler for parsed notifications
         """
         try:
+            logger.debug(f"Received notification: {_format_bytearray(data)}")
             client_slot, payload_length, payload = self._validate_packet(data)
             notifications.handle_packet(client_slot, payload_length, payload)
         except ValueError as e:
-            logger.warning(str(e))
+            logger.debug(f"Invalid packet: {e}")
 
     def subscribe(self, notifications: Notifications) -> None:
         """Subscribe to device notifications.
@@ -183,6 +196,7 @@ class Connection:
         Args:
             notifications: Handler for received notifications
         """
+        logger.debug("Setting up notification handler")
         self._notifications = notifications
 
         async def handle(sender: Any, data: bytearray) -> None:
@@ -193,6 +207,7 @@ class Connection:
 
         # Start notification listener
         asyncio.create_task(self._client.start_notify(UUID_READ, handle))
+        logger.debug("Notification handler setup complete")
 
     def _handle_partial_packet(self, data: bytearray, notifications: Notifications) -> None:
         """Handle continuation of a split packet.
@@ -201,6 +216,7 @@ class Connection:
             data: Next chunk of packet data
             notifications: Handler for complete packets
         """
+        logger.debug(f"Handling partial packet continuation: {_format_bytearray(data)}")
         self._partial_payload.extend(data)
         payload = self._partial_payload
         client_slot = self._reassembly_client_slot
@@ -210,11 +226,10 @@ class Connection:
 
         if len(payload) >= payload_length:
             if len(payload) == payload_length:
+                logger.debug(f"Completed packet reassembly - length: {payload_length}")
                 notifications.handle_packet(client_slot, payload_length, payload)
             else:
-                logger.debug(
-                    f"Payload length mismatch: expected {payload_length}, got {len(payload)}"
-                )
+                logger.debug(f"Payload length mismatch: expected {payload_length}, got {len(payload)}")
 
     def _handle_new_packet(self, data: bytearray, notifications: Notifications) -> None:
         """Handle a new packet from the device.
@@ -224,21 +239,22 @@ class Connection:
             notifications: Handler for complete packets
         """
         if len(data) < 3:
-            logger.debug(f"Ignoring too-short packet: {data}")
+            logger.debug(f"Ignoring too-short packet: {_format_bytearray(data)}")
             return
 
         client_slot = data[0] - 0x40
         payload_length = data[2]
         payload = data[3:]
 
+        logger.debug(f"New packet - client_slot: {client_slot}, length: {payload_length}, data: {_format_bytearray(payload)}")
+
         if len(payload) < payload_length:
+            logger.debug(f"Starting packet reassembly - expected length: {payload_length}")
             self._start_packet_reassembly(client_slot, payload_length, payload)
         elif len(payload) == payload_length:
             notifications.handle_packet(client_slot, payload_length, payload)
         else:
-            logger.debug(
-                f"Payload length mismatch: expected {payload_length}, got {len(payload)}"
-            )
+            logger.debug(f"Payload length mismatch: expected {payload_length}, got {len(payload)}")
 
     def _reset_packet_reassembly(self) -> None:
         """Reset packet reassembly state."""
@@ -362,8 +378,9 @@ class Connection:
         Args:
             data: Data to write
         """
-        logger.debug(f"Writing data: {_format_bytearray(data)}")
+        logger.debug(f"Writing data to device: {_format_bytearray(data)}")
         await self._client.write_gatt_char(UUID_WRITE, bytes(data), response=False)
+        logger.debug("Write completed")
 
     async def get_device_info(self) -> Dict[str, str]:
         """Get basic device information.
@@ -371,10 +388,12 @@ class Connection:
         Returns:
             dict: Device name, manufacturer and model
         """
+        logger.debug("Requesting device information")
         device_name = (await self._read(UUID_DEVICE_NAME)).decode('UTF-8')
         manufacturer = (await self._read(UUID_MANUFACTURER)).decode('UTF-8')
         model_number = (await self._read(UUID_MODEL_NUMBER)).decode('UTF-8')
 
+        logger.debug(f"Device info - name: {device_name}, manufacturer: {manufacturer}, model: {model_number}")
         return {'name': device_name, 'manufacturer': manufacturer, 'model': model_number}
 
     async def request_client_details(self, client_slot: int) -> None:

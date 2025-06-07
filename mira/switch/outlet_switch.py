@@ -98,3 +98,17 @@ class SoakStationOutletSwitch(SwitchEntity):
             DeviceInfo: Device information for Home Assistant
         """
         return self._metadata.get_device_info()
+
+    @property
+    def icon(self):
+        """Get the icon to display for this entity.
+        
+        Returns:
+            str: Material Design Icon name:
+                - "mdi:shower" when the outlet is on
+                - "mdi:shower-head-off" when the outlet is off
+        """
+        if self.is_on:
+            return "mdi:shower"
+        else:
+            return "mdi:shower-head-off"

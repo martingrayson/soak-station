@@ -9,8 +9,6 @@ from homeassistant.helpers.device_registry import DeviceInfo
 
 from ... import DOMAIN
 
-_LOGGER = logging.getLogger(__name__)
-
 
 class TimerState(Enum):
     STOPPED = "stopped"
@@ -112,7 +110,7 @@ class SoakStationMetadata:
 
     def get_device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            sw_version=f"valve:{self.valve_sw_version} bt:{self.bt_sw_version} ui:{self.ui_sw_version}",
+            sw_version=f"v{self.valve_sw_version}/b{self.bt_sw_version}/u{self.ui_sw_version}",
             suggested_area="Bathroom",
             serial_number=self.serial_number,
             name=self.name,

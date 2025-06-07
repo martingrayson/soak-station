@@ -13,8 +13,6 @@ from homeassistant.config_entries import ConfigEntry
 from .mira.sensors.outlet_binary_sensor import SoakStationOutletBinarySensor
 from .const import DOMAIN
 
-_LOGGER = logging.getLogger(__name__)
-
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
