@@ -105,10 +105,5 @@ class SoakStationOutletSwitch(SwitchEntity):
         
         Returns:
             str: Material Design Icon name:
-                - "mdi:shower" when the outlet is on
-                - "mdi:shower-head-off" when the outlet is off
         """
-        if self.is_on:
-            return "mdi:shower"
-        else:
-            return "mdi:shower-head-off"
+        return "mdi:shower-head"
