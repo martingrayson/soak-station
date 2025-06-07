@@ -95,7 +95,7 @@ class Notifications:
         if handler:
             handler(client_slot, payload)
         else:
-            logger.warning("No handler for payload length %d", payload_length)
+            logger.debug("No handler for payload length %d", payload_length)
         self._set()
 
     def _handle_success_or_failure(self, slot: int, payload: bytearray) -> None:
@@ -108,11 +108,11 @@ class Notifications:
         status: int = payload[0]
 
         if status == FAILURE:
-            logger.warning("The command failed")
+            logger.debug("The command failed")
         elif self._is_pairing:
             self.client_slot = status
         elif status == SUCCESS:
-            logger.info("The command completed successfully")
+            logger.debug("The command completed successfully")
         else:
             raise Exception(f"Unrecognized status: {status}")
 
@@ -129,7 +129,6 @@ class Notifications:
         slots: List[int] = _bits_to_list(struct.unpack(">H", payload)[0], 16)
         if self._model:
             self._model.slots = slots
-            logger.warning(f"handle slots: {slots}")
 
     def _handle_device_settings(self, slot: int, payload: bytearray) -> None:
         """Handle device settings packet.
@@ -157,13 +156,13 @@ class Notifications:
         """
         # Validate payload length
         if len(payload) < 7:
-            logger.warning(f"Unexpected payload length for device state: {len(payload)} - {payload}")
+            logger.debug(f"Unexpected payload length for device state: {len(payload)} - {payload}")
             return
 
         # Extract timer state
         timer_state: Optional[TimerState] = TIMER_STATE_MAP.get(payload[1])
         if timer_state is None:
-            logger.warning(f"Unknown timer state value: {payload[1]}")
+            logger.debug(f"Unknown timer state value: {payload[1]}")
 
         # Extract temperature and state information
         target_temperature: float = _convert_temperature_reverse(payload[1:3])
@@ -189,7 +188,7 @@ class Notifications:
             # Extract timer state
             timer_state: Optional[TimerState] = TIMER_STATE_MAP.get(payload[1])
             if timer_state is None:
-                logger.warning(f"Unknown timer state value: {payload[1]}")
+                logger.debug(f"Unknown timer state value: {payload[1]}")
 
             # Extract temperature and state information
             target_temperature: float = _convert_temperature_reverse(payload[2:4])
@@ -222,18 +221,14 @@ class Notifications:
             slot: Client slot number
             payload: Packet payload containing technical info or nickname
         """
-        logger.warning(f"handle tech information or nickname: {payload}")
         if self._metadata is None:
             return
 
         if payload[0] == 0:
             values = struct.unpack(">8H", payload)
-            logging.warning(f"values: {values}")
             valve_sw_version: str = f"{values[0]}.{values[1]}"
             bt_sw_version: str = f"{values[2]}.{values[3]}"
             ui_sw_version: str = f"{values[6]}.{values[7]}"
-
-            logger.warning(f"valve_sw_version: {valve_sw_version} - bt_sw_version: {bt_sw_version} - ui_sw_version: {ui_sw_version}")
 
             self._metadata.update_from_technical_info(valve_sw_version, bt_sw_version, ui_sw_version)
         else:
@@ -251,5 +246,4 @@ class Notifications:
             outlet_flags: List[int] = _bits_to_list(payload[5], 8)
             name: str = payload[8:].decode('UTF-8')
 
-            logger.warning(f"handle preset details: {slot} - {target_temp} - {duration} - {outlet_flags} - {name}")
             self._metadata.update_preset(slot, target_temp, duration, outlet_flags, name)

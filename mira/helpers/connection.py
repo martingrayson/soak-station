@@ -127,7 +127,6 @@ class Connection:
 
     async def disconnect(self) -> None:
         """Disconnect from device."""
-        logger.warning("Disconnecting")
         self._peripheral = None
         if self._client and self._client.is_connected:
             await self._client.disconnect()
@@ -172,7 +171,6 @@ class Connection:
             data: Raw notification data
             notifications: Handler for parsed notifications
         """
-        logger.warning(f"Notification received: {_format_bytearray(data)}")
         try:
             client_slot, payload_length, payload = self._validate_packet(data)
             notifications.handle_packet(client_slot, payload_length, payload)
@@ -194,7 +192,6 @@ class Connection:
                 self._handle_new_packet(data, notifications)
 
         # Start notification listener
-        logger.warning("Subscribing to BLE notifications for UUID_READ")
         asyncio.create_task(self._client.start_notify(UUID_READ, handle))
 
     def _handle_partial_packet(self, data: bytearray, notifications: Notifications) -> None:
@@ -215,7 +212,7 @@ class Connection:
             if len(payload) == payload_length:
                 notifications.handle_packet(client_slot, payload_length, payload)
             else:
-                logger.warning(
+                logger.debug(
                     f"Payload length mismatch: expected {payload_length}, got {len(payload)}"
                 )
 
@@ -227,7 +224,7 @@ class Connection:
             notifications: Handler for complete packets
         """
         if len(data) < 3:
-            logger.warning(f"Ignoring too-short packet: {data}")
+            logger.debug(f"Ignoring too-short packet: {data}")
             return
 
         client_slot = data[0] - 0x40
@@ -239,7 +236,7 @@ class Connection:
         elif len(payload) == payload_length:
             notifications.handle_packet(client_slot, payload_length, payload)
         else:
-            logger.warning(
+            logger.debug(
                 f"Payload length mismatch: expected {payload_length}, got {len(payload)}"
             )
 
@@ -275,7 +272,7 @@ class Connection:
         Raises:
             Exception: If pairing times out
         """
-        logger.warning(f"Pairing client {new_client_id} with {client_name}")
+        logger.debug(f"Pairing client {new_client_id} with {client_name}")
         
         payload = self._build_pairing_payload(new_client_id, client_name)
         full_payload = _get_payload_with_crc(payload, MAGIC_ID)
@@ -322,7 +319,6 @@ class Connection:
         self._response_event.clear()
         self._response_data = None
 
-        logger.warning(f"Pairing ... awaiting notify")
         await self._client.start_notify(UUID_READ, 
             lambda _, data: self._handle_notification(data, notifications))
 
@@ -335,10 +331,8 @@ class Connection:
             except asyncio.TimeoutError:
                 raise Exception("No response received from device after pairing")
 
-            logger.warning(f"{new_client_id}, {notifications.client_slot}")
             return new_client_id, notifications.client_slot
         finally:
-            logger.warning(f"Stopping notify!!")
             await self._client.stop_notify(UUID_READ)
 
     async def _read(self, characteristic: str) -> bytes:
@@ -433,7 +427,6 @@ class Connection:
 
     async def request_technical_info(self) -> None:
         """Request technical device information."""
-        logger.warning("requesting technical info")
         payload = bytearray([self._client_slot, 0x32, 1, 1])
         await self._write(_get_payload_with_crc(payload, self._client_id))
 

@@ -44,8 +44,6 @@ class SoakStationData:
             timer_state=None,
             remaining_seconds=None
     ):
-        # _LOGGER.warning(f"Updating state!")
-
         # Update each field only if provided (not None)
         if slots is not None:
             self.slots = slots
