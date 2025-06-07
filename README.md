@@ -1,4 +1,3 @@
-
 # 🚿 SoakStation
 
 **SoakStation** is a custom [Home Assistant](https://www.home-assistant.io/) integration that allows you to monitor and control **Mira Bluetooth-enabled smart showers and baths**.
@@ -12,7 +11,7 @@ It provides real-time access to device state, temperature readings, and timer da
 
 ## 🔧 Features
 
-- 💧 Detect when outlets are running (shower/bath flow).
+- 💧 Detect and control outlet states (shower/bath flow).
 - 🌡️ Report both **target** and **actual** water temperatures.
 - ⏲️ Monitor remaining timer duration.
 - 📶 Uses Bluetooth Low Energy (BLE) to communicate locally.
@@ -44,6 +43,7 @@ It provides real-time access to device state, temperature readings, and timer da
 |--------------------|------------------------------------------------|
 | `binary_sensor`    | Outlet 1 & 2 state (running or off)            |
 | `sensor`           | Target temp, actual temp, timer state & time   |
+| `switch`           | Control Outlet 1 & 2 power states              |
 
 
 
@@ -54,6 +54,8 @@ Once installed, you can:
 - Automate alerts if the shower runs too long
 - Show water temperature in a dashboard
 - Pause the bath timer if the room gets too cold (via automation)
+- Control shower/bath outlets directly from Home Assistant
+- Create automations to turn outlets on/off based on conditions
 
 
 
