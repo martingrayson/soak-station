@@ -1,0 +1,18 @@
+# Pins Home Assistant (2025.5.3) and pytest; keep in step with the HA version you run.
+pytest-homeassistant-custom-component==0.13.246
+
+# Requirements of the HA integrations this one depends on (bluetooth, usb),
+# at the versions HA 2025.5.3 pins. HA installs these at runtime, but the
+# test harness doesn't.
+aiousbwatcher==1.1.1
+bleak==0.22.3
+bleak-retry-connector==3.9.0
+bluetooth-adapters==0.21.4
+bluetooth-auto-recovery==1.5.1
+bluetooth-data-tools==1.28.1
+dbus-fast==2.43.0
+habluetooth==3.48.2
+pyserial==3.5
+
+# aiodns 3.4 (pinned by HA) breaks with pycares 5.
+pycares<5
