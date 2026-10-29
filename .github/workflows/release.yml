@@ -5,52 +5,55 @@ on:
   push:
     branches:
       - main
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  release:
-    name: Semantic Release
+  test:
+    name: Tests
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Required for semantic-release to analyze full history
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install poetry
-          poetry install
-          pip install python-semantic-release tomlkit
+          pip install -r requirements_test.txt
 
       - name: Run tests
-        run: |
-          poetry run pytest tests
+        run: python -m pytest
 
-      - name: Semantic Release (dry run)
-        run: semantic-release publish --noop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  release:
+    name: Semantic Release
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: release
+    permissions:
+      contents: write
 
-      - name: Semantic Release (real run)
-        if: github.ref == 'refs/heads/main'
-        run: semantic-release publish
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for semantic-release to analyze full history
+          ref: ${{ github.sha }}
 
-      - name: Update Home Assistant manifest version
-        if: github.ref == 'refs/heads/main'
-        run: |
-          VERSION=$(semantic-release print-version)
-          python .github/scripts/update_manifest.py "$VERSION"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore(manifest): bump version to $VERSION"
-          git push
+      - name: Point the branch at this commit
+        run: git checkout -B ${{ github.ref_name }} ${{ github.sha }}
+
+      # Bumps pyproject.toml and manifest.json, updates CHANGELOG.md, commits,
+      # tags and creates the GitHub release (config in pyproject.toml).
+      - name: Semantic Release
+        uses: python-semantic-release/python-semantic-release@v9.21.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
