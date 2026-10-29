@@ -183,10 +183,10 @@ class Notifications:
             logger.debug(f"Unexpected payload length for device state: {len(payload)}")
             return False
 
-        # Extract timer state
-        timer_state: Optional[TimerState] = TIMER_STATE_MAP.get(payload[1])
+        # Extract timer state (byte 0; bytes 1-2 are the target temperature)
+        timer_state: Optional[TimerState] = TIMER_STATE_MAP.get(payload[0])
         if timer_state is None:
-            logger.debug(f"Unknown timer state value: {payload[1]}")
+            logger.debug(f"Unknown timer state value: {payload[0]}")
             return False
 
         # Extract temperature and state information
@@ -278,7 +278,9 @@ class Notifications:
             ui_sw_version: str = f"{values[6]}.{values[7]}"
 
             logger.debug(f"Technical info - valve: {valve_sw_version}, bt: {bt_sw_version}, ui: {ui_sw_version}")
-            self._metadata.update_from_technical_info(valve_sw_version, bt_sw_version, ui_sw_version)
+            self._metadata.update_from_technical_info(valve_sw_version=valve_sw_version,
+                                                      ui_sw_version=ui_sw_version,
+                                                      bt_sw_version=bt_sw_version)
             return True
         else:
             nickname = payload.decode("UTF-8")

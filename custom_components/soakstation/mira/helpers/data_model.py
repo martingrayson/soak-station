@@ -7,7 +7,7 @@ from typing import Dict, Optional
 
 from homeassistant.helpers.device_registry import DeviceInfo
 
-from ... import DOMAIN
+from ...const import DOMAIN
 
 
 class TimerState(Enum):
@@ -110,7 +110,8 @@ class SoakStationMetadata:
 
     def get_device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            sw_version=f"v{self.valve_sw_version}/b{self.bt_sw_version}/u{self.ui_sw_version}",
+            sw_version=(f"v{self.valve_sw_version}/b{self.bt_sw_version}/u{self.ui_sw_version}"
+                        if self.valve_sw_version else None),
             suggested_area="Bathroom",
             serial_number=self.serial_number,
             name=self.name,
@@ -157,5 +158,10 @@ class SoakStationMetadata:
         self.default_preset_slot = default_preset_slot
         self.controller_settings = controller_settings
 
-    async def wait_for_technical_info(self):
-        await self._technical_info_event.wait()
+    async def wait_for_technical_info(self, timeout: float = 5.0) -> bool:
+        """Wait for the technical info reply; False if it didn't arrive in time."""
+        try:
+            await asyncio.wait_for(self._technical_info_event.wait(), timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
