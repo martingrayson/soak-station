@@ -48,7 +48,7 @@ def test_temperature_conversion():
 
     # Test edge cases
     assert _convert_temperature_reverse(_convert_temperature(-10.0)) == 0.0  # Should clamp to 0
-    assert _convert_temperature_reverse(_convert_temperature(1000.0)) == 6553.5  # Should clamp to max
+    assert _convert_temperature_reverse(_convert_temperature(7000.0)) == 6553.5  # Should clamp to max
 
 def test_format_bytearray():
     """Test bytearray formatting."""
