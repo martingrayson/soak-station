@@ -1,6 +1,6 @@
 [project]
 name = "soakstation"
-version = "0.1.0"
+version = "0.1.1"
 description = "Home Assistant integration for Mira SoakStation smart showers"
 readme = "README.md"
 requires-python = ">=3.10"
