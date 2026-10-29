@@ -1,4 +1,5 @@
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+from homeassistant.const import UnitOfTime
 
 from ...entity import SoakStationEntity
 
@@ -19,7 +20,9 @@ class SoakStationTimerRemainingSensor(SoakStationEntity, SensorEntity):
         # Configure entity attributes
         self._attr_name = f"Timer Remaining ({device_name})"
         self._attr_unique_id = f"soakstation_timerremaining_{address.replace(':', '')}"
-        self._attr_native_unit_of_measurement = "s"
+        # a duration, so Home Assistant shows it as minutes and seconds, not a bare count
+        self._attr_device_class = SensorDeviceClass.DURATION
+        self._attr_native_unit_of_measurement = UnitOfTime.SECONDS
         self._attr_icon = "mdi:timer-sand"
 
     @property

@@ -69,6 +69,9 @@ async def test_setup(hass, shower):
     assert hass.states.get(OUTLET_2).state == STATE_OFF
     assert float(hass.states.get(ACTUAL).state) == 21.5
     assert hass.states.get(TIMER).state == "stopped"
+    remaining = hass.states.get("sensor.timer_remaining_mira_n86sd_master_bathroom")
+    assert remaining.attributes["device_class"] == "duration"
+    assert remaining.attributes["unit_of_measurement"] == "s"
 
     # unique ids unchanged, so existing entities, dashboards and automations keep working
     registry = er.async_get(hass)
