@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
 from .mira.sensors.outlet_binary_sensor import SoakStationOutletBinarySensor
-from .const import DOMAIN
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -25,23 +24,14 @@ async def async_setup_entry(
         config_entry: Configuration entry containing device details
         async_add_entities: Callback to add entities to Home Assistant
     """
-    # Extract device configuration
-    data = config_entry.data
-    address = data["device_address"]
-    device_name = data["device_name"]
-
-    # Get device data and metadata from hass storage
-    config_data = hass.data[DOMAIN][config_entry.entry_id]["data"]
-    meta = hass.data[DOMAIN][config_entry.entry_id]["metadata"]
+    coordinator = config_entry.runtime_data
+    address = config_entry.data["device_address"]
+    device_name = config_entry.data["device_name"]
 
     # Create binary sensors for each outlet
     sensors = [
-        SoakStationOutletBinarySensor(
-            hass, config_data, meta, device_name, address, outlet_num=1
-        ),
-        SoakStationOutletBinarySensor(
-            hass, config_data, meta, device_name, address, outlet_num=2
-        )
+        SoakStationOutletBinarySensor(coordinator, device_name, address, outlet_num=1),
+        SoakStationOutletBinarySensor(coordinator, device_name, address, outlet_num=2),
     ]
 
     # Register sensors with Home Assistant

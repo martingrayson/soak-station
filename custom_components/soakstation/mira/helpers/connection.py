@@ -7,12 +7,13 @@ BLE connections, sending commands, and receiving notifications from Mira devices
 import asyncio
 import logging
 import struct
-from typing import Optional, Tuple, Dict, Any, Union
-from bleak import BLEDevice, BleakClient
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
-from homeassistant.components.bluetooth import (
-    async_ble_device_from_address
-)
+from bleak import BleakClient
+from bleak.backends.device import BLEDevice
+from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
+
+from homeassistant.components.bluetooth import async_ble_device_from_address
 
 from .const import MAGIC_ID, TIMER_RUNNING, OUTLET_RUNNING, OUTLET_STOPPED, TIMER_PAUSED, \
     UUID_DEVICE_NAME, UUID_MANUFACTURER, UUID_MODEL_NUMBER, UUID_READ, UUID_WRITE
@@ -24,24 +25,25 @@ logger = logging.getLogger(__name__)
 
 class Connection:
     """Manages BLE connections and communication with Mira devices.
-    
+
     This class handles:
-    - Establishing and maintaining BLE connections
+    - Establishing the connection through bleak-retry-connector, which retries,
+      caches the GATT services and picks the best Bluetooth adapter or proxy
+    - Noticing when the connection drops, and re-subscribing to notifications
+      every time it is re-established
     - Sending commands to control device functions
-    - Processing notifications and responses from the device
     - Packet validation and reassembly
     - Client pairing and device information retrieval
-    
+
     Attributes:
         _hass: Home Assistant instance for device discovery
         _address: Bluetooth MAC address of target device
-        _peripheral: BLE device instance once connected
         _client_id: Unique identifier for this client
         _client_slot: Slot number assigned by device
         _client: BleakClient instance for BLE communication
-        _notifications: Handler for device notifications
-        _response_event: Event for synchronizing responses
-        _response_data: Storage for response data
+        _notifications: Handler for device notifications, re-subscribed on every connect
+        _on_disconnect: Called when the connection drops unexpectedly
+        _connect_lock: Stops two callers connecting at the same time
         _partial_payload: Buffer for reassembling split packets
         _reassembly_client_slot: Client slot for packet being reassembled
         _reassembly_payload_length: Expected length of reassembled packet
@@ -58,18 +60,19 @@ class Connection:
         """
         self._hass: Any = hass
         self._address: str = address
-        self._peripheral: Optional[BLEDevice] = None
         self._client_id: Optional[int] = client_id
         self._client_slot: Optional[int] = client_slot
         self._client: Optional[BleakClient] = None
         self._notifications: Optional[Notifications] = None
+        self._on_disconnect: Optional[Callable[[], None]] = None
+        self._connect_lock: asyncio.Lock = asyncio.Lock()
 
         self._response_event: asyncio.Event = asyncio.Event()
         self._response_data: Any = None
 
         # For packet reassembly
         self._partial_payload: bytearray = bytearray()
-        self._reassembly_client_slot: Optional[int] = None 
+        self._reassembly_client_slot: Optional[int] = None
         self._reassembly_payload_length: Optional[int] = None
 
     def set_client_data(self, client_id: int, client_slot: int) -> None:
@@ -82,65 +85,92 @@ class Connection:
         self._client_id = client_id
         self._client_slot = client_slot
 
-    async def connect(self, retries: int = 10, delay: float = 1.0) -> None:
-        """Establish BLE connection to device.
+    def set_disconnect_callback(self, callback: Optional[Callable[[], None]]) -> None:
+        """Set a callback for when the connection drops unexpectedly.
 
         Args:
-            retries: Number of connection attempts
-            delay: Delay between retries in seconds
+            callback: Called (in the event loop) with no arguments
+        """
+        self._on_disconnect = callback
+
+    @property
+    def is_connected(self) -> bool:
+        """Whether there is a live connection to the device."""
+        return self._client is not None and self._client.is_connected
+
+    async def connect(self, max_attempts: int = 3) -> None:
+        """Connect to the device, if not already connected.
+
+        Retries are handled by bleak-retry-connector. When a notification handler
+        has been subscribed, notifications are (re-)started on the new connection.
+
+        Args:
+            max_attempts: Connection attempts before giving up
 
         Raises:
-            Exception: If connection fails after all retries
+            ConnectionError: If no Bluetooth adapter or proxy can see the device
+            BleakError: If connecting fails after all attempts
         """
-        for attempt in range(retries):
-            try:
-                logger.debug(f"Attempting to connect to device at {self._address} (attempt {attempt + 1}/{retries})")
-                self._peripheral = await self._get_ble_device()
-                self._client = BleakClient(self._peripheral)
-                await self._client.connect()
-                logger.debug(f"Successfully connected to device at {self._address}")
+        async with self._connect_lock:
+            if self.is_connected:
                 return
-            except Exception as e:
-                if attempt == retries - 1:
-                    logger.debug(f"Failed to connect after {retries} attempts: {e}")
-                    raise
-                logger.debug(f"Connection attempt {attempt + 1} failed: {e}")
-                await asyncio.sleep(delay)
+            device = self._get_ble_device()
+            logger.debug(f"Connecting to {self._address}")
+            client = await establish_connection(
+                BleakClientWithServiceCache,
+                device,
+                device.name or self._address,
+                disconnected_callback=self._handle_disconnected,
+                max_attempts=max_attempts,
+                ble_device_callback=self._get_ble_device,
+            )
+            self._client = client
+            self._reset_packet_reassembly()
+            try:
+                if self._notifications is not None:
+                    await client.start_notify(UUID_READ, self._handle_raw_notification)
+            except Exception:
+                self._client = None
+                await client.disconnect()
+                raise
+            logger.debug(f"Connected to {self._address}")
 
-    async def _get_ble_device(self) -> BLEDevice:
-        """Get BLE device from address.
+    def _get_ble_device(self) -> BLEDevice:
+        """Get the BLE device for the address, from whichever adapter or proxy sees it best.
 
         Returns:
             BLEDevice: The discovered device
 
         Raises:
-            ConnectionError: If device not found
+            ConnectionError: If no adapter or proxy can currently see the device
         """
-        logger.debug(f"Discovering device at address {self._address}")
-        device = async_ble_device_from_address(
-            self._hass, self._address, connectable=True
-        )
+        device = async_ble_device_from_address(self._hass, self._address, connectable=True)
         if not device:
-            logger.debug(f"Device not found at address {self._address}")
-            raise ConnectionError("Device not found")
-        logger.debug(f"Found device: {device.name} ({device.address})")
+            raise ConnectionError(f"No Bluetooth adapter or proxy can see {self._address}")
         return device
+
+    def _handle_disconnected(self, client: BleakClient) -> None:
+        """Handle the connection dropping (bleak disconnected callback)."""
+        if client is not self._client:
+            return  # an old connection, already replaced or closed deliberately
+        logger.debug(f"Disconnected from {self._address}")
+        self._client = None
+        self._reset_packet_reassembly()
+        if self._on_disconnect is not None:
+            self._on_disconnect()
 
     async def reconnect(self) -> None:
         """Disconnect and reconnect to device."""
         logger.debug("Initiating reconnection")
         await self.disconnect()
-        await asyncio.sleep(1)  # small delay to allow clean BLE state
         await self.connect()
-        logger.debug("Reconnection completed")
 
     async def disconnect(self) -> None:
-        """Disconnect from device."""
-        logger.debug("Disconnecting from device")
-        self._peripheral = None
-        if self._client and self._client.is_connected:
-            await self._client.disconnect()
-            logger.debug("Device disconnected")
+        """Disconnect from device, without calling the disconnect callback."""
+        client, self._client = self._client, None
+        if client is not None and client.is_connected:
+            logger.debug("Disconnecting from device")
+            await client.disconnect()
 
     async def __aenter__(self) -> "Connection":
         """Connect when entering context."""
@@ -190,24 +220,27 @@ class Connection:
         except ValueError as e:
             logger.debug(f"Invalid packet: {e}")
 
-    def subscribe(self, notifications: Notifications) -> None:
+    async def subscribe(self, notifications: Notifications) -> None:
         """Subscribe to device notifications.
+
+        The handler is kept and re-subscribed on every (re)connect.
 
         Args:
             notifications: Handler for received notifications
         """
         logger.debug("Setting up notification handler")
         self._notifications = notifications
+        if self.is_connected:
+            await self._client.start_notify(UUID_READ, self._handle_raw_notification)
 
-        async def handle(sender: Any, data: bytearray) -> None:
-            if len(self._partial_payload) > 0:
-                self._handle_partial_packet(data, notifications)
-            else:
-                self._handle_new_packet(data, notifications)
-
-        # Start notification listener
-        asyncio.create_task(self._client.start_notify(UUID_READ, handle))
-        logger.debug("Notification handler setup complete")
+    def _handle_raw_notification(self, sender: Any, data: bytearray) -> None:
+        """Pass a notification chunk to the packet reassembly."""
+        if self._notifications is None:
+            return
+        if len(self._partial_payload) > 0:
+            self._handle_partial_packet(data, self._notifications)
+        else:
+            self._handle_new_packet(data, self._notifications)
 
     def _handle_partial_packet(self, data: bytearray, notifications: Notifications) -> None:
         """Handle continuation of a split packet.
@@ -360,7 +393,10 @@ class Connection:
         Returns:
             bytes: Data read from characteristic
         """
-        return await self._client.read_gatt_char(characteristic)
+        client = self._client
+        if client is None or not client.is_connected:
+            raise ConnectionError(f"Not connected to {self._address}")
+        return await client.read_gatt_char(characteristic)
 
     async def _write_chunks(self, data: bytearray, chunk_size: int = 20) -> None:
         """Write data in chunks to device.
@@ -377,9 +413,15 @@ class Connection:
 
         Args:
             data: Data to write
+
+        Raises:
+            ConnectionError: If not connected
         """
+        client = self._client
+        if client is None or not client.is_connected:
+            raise ConnectionError(f"Not connected to {self._address}")
         logger.debug(f"Writing data to device: {_format_bytearray(data)}")
-        await self._client.write_gatt_char(UUID_WRITE, bytes(data), response=False)
+        await client.write_gatt_char(UUID_WRITE, bytes(data), response=False)
         logger.debug("Write completed")
 
     async def get_device_info(self) -> Dict[str, str]:

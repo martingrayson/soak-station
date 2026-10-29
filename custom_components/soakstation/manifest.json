@@ -4,13 +4,17 @@
   "version": "1.0.0",
   "documentation": "https://github.com/martingrayson/soak_station",
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": [
+    "bluetooth_adapters"
+  ],
   "codeowners": [
     "@martingrayson"
   ],
-  "requirements": [
-    "aiohttp"
-  ],
+  "requirements": [],
   "iot_class": "local_polling",
-  "supported_platforms": ["sensor", "binary_sensor", "switch"]
+  "supported_platforms": [
+    "sensor",
+    "binary_sensor",
+    "switch"
+  ]
 }
